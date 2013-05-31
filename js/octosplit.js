@@ -3,7 +3,243 @@ $(document).ready(function() {
   addCheckbox();
   manageNewComment();
   manageTabs();
+  addShowLines();
 });
+
+var FileState = (function FileStateClosure() {
+  function FileState($fileDiff) {
+    this.$fileDiff = $fileDiff;
+
+    var $lineNumber = this.$fileDiff.find('.diff-line-num:first').eq(0);
+    this.fileIndex = parseInt($lineNumber.attr('id').match(/^L(\d+)/)[1], 10);
+
+    var $statLines = $fileDiff.find('.file-diff-line.gc');
+
+    var missingRanges = this.missingRanges = [];
+    var prevIndicies = { old: null, new: null };
+    for (var i = 0; i < $statLines.length; ++i) {
+      var $statLine = $statLines.eq(i);
+      var $aboveLine = $statLine.prev();
+      var $belowLine = $statLine.next();
+      if ($aboveLine.length) {
+        var aboveIndicies = this.parseLineIndicies($aboveLine);
+      }
+      if ($belowLine.length) {
+        var belowIndicies = this.parseLineIndicies($belowLine);
+      }
+
+      if (!belowIndicies) {
+        console.error('Did not find lines below comment line');
+        continue;
+      } else if (!aboveIndicies) {
+        var missingRange = {
+          old: 0,
+          new: 0,
+          length: belowIndicies.new
+        };
+      } else {
+        var missingRange = {
+          old: aboveIndicies.old + 1,
+          new: aboveIndicies.new + 1,
+          length: belowIndicies.new - (aboveIndicies.new + 1)
+        };
+      }
+
+      var $showLinesRow = $(
+        '<td class="show-lines" colspan="3">'
+        + '<a class="show-above-20" href="#">▲ Show 20 lines</a> • '
+        + '<a class="show-all" href="#">Show all lines</a> • '
+        + '<a class="show-below-20" href="#">▼ Show 20 lines</a>'
+        + '</td>'
+      );
+      $showLinesRow.find('.show-above-20').click(
+          this.showAbove20.bind(this, missingRange));
+      $showLinesRow.find('.show-all').click(
+          this.showAll.bind(this, missingRange));
+      $showLinesRow.find('.show-below-20').click(
+          this.showBelow20.bind(this, missingRange));
+      $statLine.replaceWith($showLinesRow);
+      missingRange.$showLinesRow = $showLinesRow;
+      missingRanges.push(missingRange);
+    }
+
+    // TODO(mack): Merge logic for last row with previous code
+    var $showLinesRow = $(
+      '<td class="show-lines" colspan="3">'
+      + '<a class="show-above-20" href="#">▲ Show 20 lines</a> • '
+      + '<a class="show-all" href="#">Show all lines</a> • '
+      + '<a class="show-below-20" href="#">▼ Show 20 lines</a>'
+      + '</td>'
+    );
+    var $lastLine = this.$fileDiff.find('tbody tr:last');
+    var lastLineIndicies = this.parseLineIndicies($lastLine);
+    var missingRange = {
+      old: lastLineIndicies.old + 1,
+      new: lastLineIndicies.new + 1,
+      length: -1
+    };
+    $lastLine.after($showLinesRow);
+
+    $showLinesRow.find('.show-above-20').click(
+        this.showAbove20.bind(this, missingRange));
+    $showLinesRow.find('.show-all').click(
+        this.showAll.bind(this, missingRange));
+    $showLinesRow.find('.show-below-20').click(
+        this.showBelow20.bind(this, missingRange));
+    missingRange.$showLinesRow = $showLinesRow;
+    missingRanges.push(missingRange);
+  }
+
+  FileState.prototype = {
+    showAbove20: function(missingRange) {
+      return this.showLines(missingRange, 'above', 20);
+    },
+
+    showBelow20: function(missingRange) {
+      return this.showLines(missingRange, 'below', 20);
+    },
+
+    showAll: function(missingRange) {
+      return this.showLines(missingRange, 'all');
+    },
+
+    showLines: function(missingRange, mode, numLines) {
+      this.fetchFile().then(function(fileLines) {
+        if (missingRange.length === -1) {
+          missingRange.length = fileLines.length - (missingRange.new + 1);
+        }
+
+        var removeShowLinesRow = false;
+        var showRange;
+
+        var newRange = missingRange.new;
+        if (mode === 'all' || missingRange.length <= numLines) {
+          var index = this.missingRanges.indexOf(missingRange);
+          this.missingRanges.splice(index, 1);
+          showRange = {
+            new: missingRange.new,
+            old: missingRange.old,
+            length: missingRange.length
+          };
+          removeShowLinesRow = true;
+        } else {
+          if (mode === 'above') {
+            showRange = {
+              new: missingRange.new,
+              old: missingRange.old,
+              length: numLines
+            };
+            missingRange.old += numLines;
+            missingRange.new += numLines;
+          } else {
+            showRange = {
+              new: missingRange.new + missingRange.length - numLines,
+              old: missingRange.old + missingRange.length - numLines,
+              length: numLines
+            };
+          }
+          showRange.length = numLines;
+          missingRange.length -= numLines;
+        }
+
+        console.log('showRange', showRange);
+        var $lines = this.getLines(fileLines, showRange);
+        if (mode === 'below') {
+          $lines.insertAfter(missingRange.$showLinesRow);
+        } else {
+          $lines.insertBefore(missingRange.$showLinesRow);
+        }
+
+        if (removeShowLinesRow) {
+          // TODO(mack): unbind event listeners
+          missingRange.$showLinesRow.remove();
+        }
+      }.bind(this));
+      return false;
+    },
+
+    getLines: function(fileLines, range) {
+      var lines = [];
+      for (var i = 0; i < range.length; ++i) {
+        var currOldLineIndex = range.old + i;
+        var currNewLineIndex = range.new + i;
+        var fileLine = fileLines[currNewLineIndex];
+        var $oldLineNumber = $(
+          '<td id="L' + this.fileIndex + 'L' + (currOldLineIndex + 1) + '"'
+          + ' class="diff-line-num linkable-line-number"'
+          + ' data-line-number="' + (currOldLineIndex + 1) + '">'
+          + '  <span class="line-num-content">' + (currOldLineIndex + 1)
+          + '  </span>'
+          + '</td>');
+        var $newLineNumber = $(
+          '<td id="L' + this.fileIndex + 'R' + (currNewLineIndex + 1) + '"'
+          + ' class="diff-line-num linkable-line-number"'
+          + ' data-line-number="' + (currNewLineIndex + 1) + '">'
+          + '  <span class="line-num-content">' + (currNewLineIndex + 1)
+          + '  </span>'
+          + '</td>');
+
+        // TODO(mack): add back
+        //<b class="add-line-comment mini-icon mini-icon-add-comment"
+        //data-remote="/mduan/pdf.js/commit_comment/form?
+        //commit_id=6b4f72a2c3ea96e44568bd82e39efec5ece614a4&amp;
+        //path=l10n/ar/viewer.properties&amp;position=9&amp;line=58"></b>
+        fileLine = $('<div/>').text(' ' + fileLine).html();
+        fileLine = fileLine
+          .replace(/ /g, '&nbsp;')
+          .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;');
+        var $lineCode = $('<td class="diff-line-code"></td>').html(fileLine);
+        var $line =
+          $('<tr class="file-diff-line"></tr>')
+            .append($oldLineNumber)
+            .append($newLineNumber)
+            .append($lineCode);
+        lines.push($line.get(0));
+      }
+      return $(lines);
+    },
+
+    fetchFile: function() {
+      if (!this.fileDataPromise) {
+        var $file = this.$fileDiff.closest('.file');
+        var $viewFileButton = $file.find('.meta .actions .minibutton');
+        var blobUrl = $viewFileButton.attr('href');
+        // TODO(mack): Be careful of '/blob/' as user or repo name
+        var rawUrl = blobUrl.replace(/^\/(.*?)\/blob\/(.*)$/,
+            'https://github.com/$1/raw/$2');
+        this.fileDataPromise = $.get(rawUrl).then(function(data) {
+          var fileLines = data.split(/\r?\n/);
+          return fileLines;
+        });
+      }
+      return this.fileDataPromise;
+    },
+
+    parseLineIndicies: function($row) {
+      var $lineNumbers = $row.find('td');
+      var oldLineIndex = parseInt($lineNumbers.eq(0).attr('data-line-number'), 10) - 1;
+      var newLineIndex = parseInt($lineNumbers.eq(1).attr('data-line-number'), 10) - 1;
+      return {
+        old: oldLineIndex,
+        new: newLineIndex
+      };
+    },
+
+    parseFileIndex: function() {
+      var $lineNumber = this.$file.find('.file-diff-line:first td:first');
+      var fileIndex = parseInt($lineNumber.attr('id').match(/^L(\d+)/)[1], 10);
+      return fileIndex;
+    }
+  };
+
+  return FileState;
+})();
+
+function addShowLines() {
+  $('table.file-diff').each(function() {
+    new FileState($(this));
+  });
+}
 
 function addWordWrapChekbox() {
   var $checkbox = $('<input type="checkbox" id="wordwrap" />');
@@ -30,6 +266,7 @@ function addCheckbox() {
     if ($(this).is(':checked')) {
       enlarge();
       splitDiffs();
+      addShowLines();
     } else {
       shrink();
       resetDiffs();
