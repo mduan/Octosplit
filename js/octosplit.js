@@ -273,7 +273,7 @@ function updateShowLines(inlineMode) {
 
 function addWordWrapChekbox() {
   var $checkbox = $('<input type="checkbox" id="wordwrap" />');
-  var $label    = $('<label id="wordwrap-label" for="wordwrap"><span class="mini-icon mini-icon-reorder"></span>Use <strong>word wrapped</strong> view</label>');
+  var $label    = $('<label id="wordwrap-label" for="wordwrap"><span class="mini-icon mini-icon-reorder"></span>word wrap</label>');
 
   $('#toc .explain').append($label, $checkbox);
 
@@ -288,7 +288,7 @@ function addWordWrapChekbox() {
 
 function addCheckbox() {
   var $checkbox = $('<input type="checkbox" id="octosplit" />');
-  var $label    = $('<label id="octosplit-label" for="octosplit"><span class="mini-icon mini-icon-public-mirror"></span>Use <strong>side by side</strong> view</label>');
+  var $label    = $('<label id="octosplit-label" for="octosplit"><span class="mini-icon mini-icon-public-mirror"></span>side by side</label>');
 
   $('#toc .explain').append($label, $checkbox);
 
