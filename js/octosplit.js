@@ -147,7 +147,6 @@ var FileState = (function FileStateClosure() {
           missingRange.length -= numLines;
         }
 
-        console.log('showRange', showRange);
         var $lines = this.getLines(fileLines, showRange);
         if (mode === 'below') {
           $lines.insertAfter(missingRange.$showLinesRow);
@@ -261,7 +260,7 @@ var FileState = (function FileStateClosure() {
 var fileStates = [];
 function addShowLines() {
   $('table.file-diff').each(function() {
-    fileStates.push(new FileState($(this, true)));
+    fileStates.push(new FileState($(this), true));
   });
 }
 
