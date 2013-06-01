@@ -7,8 +7,9 @@ $(document).ready(function() {
 });
 
 var FileState = (function FileStateClosure() {
-  function FileState($fileDiff) {
+  function FileState($fileDiff, inlineMode) {
     this.$fileDiff = $fileDiff;
+    this.inlineMode = inlineMode;
 
     var $lineNumber = this.$fileDiff.find('.diff-line-num:first').eq(0);
     this.fileIndex = parseInt($lineNumber.attr('id').match(/^L(\d+)/)[1], 10);
@@ -46,11 +47,13 @@ var FileState = (function FileStateClosure() {
       }
 
       var $showLinesRow = $(
-        '<td class="show-lines" colspan="3">'
-        + '<a class="show-above-20" href="#">▲ Show 20 lines</a> • '
-        + '<a class="show-all" href="#">Show all lines</a> • '
-        + '<a class="show-below-20" href="#">▼ Show 20 lines</a>'
+        '<tr class="show-lines">'
+        + '<td colspan="3">'
+        + ' <a class="show-above-20" href="#">▲ Show 20 lines</a> • '
+        + ' <a class="show-all" href="#">Show all lines</a> • '
+        + ' <a class="show-below-20" href="#">▼ Show 20 lines</a>'
         + '</td>'
+        + '</tr>'
       );
       $showLinesRow.find('.show-above-20').click(
           this.showAbove20.bind(this, missingRange));
@@ -65,11 +68,13 @@ var FileState = (function FileStateClosure() {
 
     // TODO(mack): Merge logic for last row with previous code
     var $showLinesRow = $(
-      '<td class="show-lines" colspan="3">'
-      + '<a class="show-above-20" href="#">▲ Show 20 lines</a> • '
-      + '<a class="show-all" href="#">Show all lines</a> • '
-      + '<a class="show-below-20" href="#">▼ Show 20 lines</a>'
+      '<tr class="show-lines">'
+      + '<td colspan="3">'
+      + ' <a class="show-above-20" href="#">▲ Show 20 lines</a> • '
+      + ' <a class="show-all" href="#">Show all lines</a> • '
+      + ' <a class="show-below-20" href="#">▼ Show 20 lines</a>'
       + '</td>'
+      + '</tr>'
     );
     var $lastLine = this.$fileDiff.find('tbody tr:last');
     var lastLineIndicies = this.parseLineIndicies($lastLine);
@@ -189,11 +194,19 @@ var FileState = (function FileStateClosure() {
           .replace(/ /g, '&nbsp;')
           .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;');
         var $lineCode = $('<td class="diff-line-code"></td>').html(fileLine);
+
         var $line =
           $('<tr class="file-diff-line"></tr>')
-            .append($oldLineNumber)
+        if (this.inlineMode) {
+          $line.append($oldLineNumber)
             .append($newLineNumber)
             .append($lineCode);
+        } else {
+          $line.append($oldLineNumber)
+            .append($lineCode)
+            .append($newLineNumber)
+            .append($lineCode.clone());
+        }
         lines.push($line.get(0));
       }
       return $(lines);
@@ -229,16 +242,33 @@ var FileState = (function FileStateClosure() {
       var $lineNumber = this.$file.find('.file-diff-line:first td:first');
       var fileIndex = parseInt($lineNumber.attr('id').match(/^L(\d+)/)[1], 10);
       return fileIndex;
+    },
+
+    updateViewMode: function(inlineMode) {
+      this.inlineMode = inlineMode;
+      var $showLines = this.$fileDiff.find('.show-lines td');
+      if (inlineMode) {
+        $showLines.attr('colspan', '3');
+      } else {
+        $showLines.attr('colspan', '4');
+      }
     }
   };
 
   return FileState;
 })();
 
+var fileStates = [];
 function addShowLines() {
   $('table.file-diff').each(function() {
-    new FileState($(this));
+    fileStates.push(new FileState($(this, true)));
   });
+}
+
+function updateShowLines(inlineMode) {
+  for (var i = 0; i < fileStates.length; ++i) {
+    fileStates[i].updateViewMode(inlineMode);
+  }
 }
 
 function addWordWrapChekbox() {
@@ -266,10 +296,11 @@ function addCheckbox() {
     if ($(this).is(':checked')) {
       enlarge();
       splitDiffs();
-      addShowLines();
+      updateShowLines(false);
     } else {
       shrink();
       resetDiffs();
+      updateShowLines(true);
     }
   });
 }
