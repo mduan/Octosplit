@@ -279,9 +279,9 @@ function addWordWrapChekbox() {
 
   $checkbox.on('click', function(event) {
     if ($(this).is(':checked')) {
-       $('#files_bucket').addClass('word-wrap');
+       $('#files').addClass('word-wrap');
     } else {
-       $('#files_bucket').removeClass('word-wrap');
+       $('#files').removeClass('word-wrap');
     }
   });
 }
