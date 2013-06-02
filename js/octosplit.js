@@ -98,10 +98,9 @@ var FileState = (function FileStateClosure() {
     }
 
     var $lastLine = this.$fileDiff.find('tbody tr:last');
-    var lastLineIndicies = this.parseLineIndex($lastLine);
     var missingRange = {
-      old: lastLineIndicies.old + 1,
-      new: lastLineIndicies.new + 1,
+      old: this.parseLineIndex($lastLine, 0) + 1,
+      new: this.parseLineIndex($lastLine, 1) + 1,
       length: -1,
       isEnd: true
     };
@@ -179,7 +178,7 @@ var FileState = (function FileStateClosure() {
     showLines: function(missingRange, mode, numLines) {
       this.fetchFile().then(function(fileLines) {
         if (missingRange.length === -1) {
-          missingRange.length = fileLines.length - (missingRange.new + 1);
+          missingRange.length = fileLines.length - missingRange.new;
         }
 
         var removeShowLinesRow = false;
@@ -312,19 +311,62 @@ var FileState = (function FileStateClosure() {
       return fileIndex;
     },
 
-    updateViewMode: function(inlineMode) {
+    setInlineMode: function(inlineMode) {
       this.inlineMode = inlineMode;
-      var $showLines = this.$fileDiff.find('.show-lines td');
-      if (inlineMode) {
-        $showLines.attr('colspan', '3');
-      } else {
-        $showLines.attr('colspan', '4');
-      }
     }
   };
 
   return FileState;
 })();
+
+//var ViewState = (function ViewStateClosure() {
+//  function ViewState($fileDiff) {
+//    this.$fileDiff = $fileDiff;
+//    this.rawLinesGroups = [];
+//
+//    var $firstLine = $fileDiff.find('.gd:first, .gi:first').first();
+//    while ($firstLine.length) {
+//      var $rawLines = $firstLine.prev().nextUntil(':not(.gd, .gi)');
+//      this.rawLinesGroups.push($rawLines);
+//      console.log('raw', $rawLines);
+//      $firstLine = $rawLines.last().nextAll('.gd:first, .gi:first').first();
+//    }
+//
+//    this.textGroups = [];
+//    for (var i = 0; i < this.rawLinesGroups.length; ++i) {
+//      var $rawLines = this.rawLinesGroups[i];
+//      var oldLines = [];
+//      $rawLines.filter('.gd').each(function() {
+//        oldLines.push($(this).find('.diff-line-code').text());
+//      });
+//      var newLines = [];
+//      $rawLines.filter('.gi').each(function() {
+//        newLines.push($(this).find('.diff-line-code').text());
+//      });
+//      this.textGroups.push({
+//        oldLines: oldLines,
+//        newLines: newLines
+//      });
+//    }
+//
+//    for (var i = 0; i < this.textGroups.length; ++i) {
+//      var textGroup = this.textGroups[i];
+//      var sequenceMatcher = new difflib.SequenceMatcher(
+//          textGroup.oldLines, textGroup.newLines);
+//      var opcodes = sequenceMatcher.get_opcodes();
+//      console.log('old', textGroup.oldLines);
+//      console.log('new', textGroup.newLines);
+//      console.log('opcodes', opcodes);
+//      if (i >= 2) {
+//        break;
+//      }
+//    }
+//  }
+//
+//  ViewState.prototype = {};
+//
+//  return ViewState;
+//})();
 
 function getSetting(key) {
   return getSettings([key]).then(function(settings) {
@@ -358,13 +400,14 @@ function saveSettings(settings) {
 var fileStates = [];
 function addShowLines() {
   $('table.file-diff').each(function() {
+    // TODO(mack): Uncomment
     fileStates.push(new FileState($(this), true));
   });
 }
 
 function updateShowLines(inlineMode) {
   for (var i = 0; i < fileStates.length; ++i) {
-    fileStates[i].updateViewMode(inlineMode);
+    fileStates[i].setInlineMode(inlineMode);
   }
 }
 
@@ -464,15 +507,118 @@ function shrink() {
 
 function splitDiffs() {
   $('table.file-diff').each(function() {
-    if (isSplittable($(this))) {
-      $('tbody tr', $(this)).each(function() {
-        if ($(this).hasClass('inline-comments')) {
-          splitInlineComment($(this));
-        } else {
-          splitDiffLine($(this))
-        }
-      });
+    var $this = $(this);
+
+    if (!isSplittable($this)) {
+      return;
     }
+
+    var $row = $this.find('tr:first');
+    while (true) {
+
+      if ($row.hasClass('gd') || $row.hasClass('gi')) {
+
+        var $nextCommonRow = $row.nextAll(
+            ':not(.gi, .gd, .inline-comments)').first();
+        if ($row.hasClass('gd')) {
+          var $deleteRow = $row;
+          var $insertRow = $deleteRow.nextAll(
+              ':not(.gd, .inline-comments)').first();
+          if (!$insertRow.hasClass('gi')) {
+            $insertRow = $();
+          }
+        } else {
+          $insertRow = $row;
+          $deleteRow = $();
+        }
+
+        var $newRows = $('<div/>');
+
+        // Process .gd and associated .gi
+        while (true) {
+          // Do something
+          if ($deleteRow.hasClass('inline-comments')) {
+            var $newRow = $('<tr class="inline-comments"></tr>');
+            if ($insertRow.hasClass('inline-comments')) {
+              $insertRow = $insertRow.next();
+              $deleteRow = $deleteRow.next();
+              splitRow($newRow, $deleteRow.prev(), $insertRow.prev());
+            } else {
+              $deleteRow = $deleteRow.next();
+              splitRow($newRow, $deleteRow.prev(), $());
+            }
+          } else if ($insertRow.hasClass('inline-comments')) {
+            var $newRow = $('<tr class="inline-comments"></tr>');
+            $insertRow = $insertRow.next();
+            splitRow($newRow, $(), $insertRow.prev());
+          } else if ($deleteRow.hasClass('gd')) {
+            var $newRow = $('<tr class="file-diff-line"></tr>');
+            $deleteRow = $deleteRow.next();
+            $insertRow = $insertRow.next();
+            splitRow($newRow, $deleteRow.prev(), $insertRow.prev());
+          } else {
+            break;
+          }
+
+          $newRows.append($newRow);
+
+          if (!$insertRow.hasClass('gi') &&
+              !$insertRow.hasClass('inline-comments')) {
+            $insertRow = $();
+          }
+        }
+
+        // Process remaining .gi
+        while (true) {
+          if ($insertRow.hasClass('inline-comments')) {
+            var $newRow = $('<tr class="inline-comments"></tr>');
+            $insertRow = $insertRow.next();
+            splitRow($newRow, $(), $insertRow.prev());
+          } else if ($insertRow.hasClass('gi')) {
+            var $newRow = $('<tr class="file-diff-line"></tr>');
+            $insertRow = $insertRow.next();
+            splitRow($newRow, $(), $insertRow.prev());
+          } else {
+            $insertRow = $();
+            break;
+          }
+
+          $newRows.append($newRow);
+        }
+
+        $row.prev().nextUntil($nextCommonRow).remove();
+        $nextCommonRow.before($newRows.children());
+        $row = $nextCommonRow;
+      } else if ($row.hasClass('file-diff-line')) {
+        var $lineNumOld = $row.find('td').eq(0).attr('colspan', 1);
+        var $lineNumNew = $row.find('td').eq(1).attr('colspan', 1);
+        var $lineCodeOld = $row.find('td').eq(2).attr('colspan', 1);
+        var $lineCodeNew = $lineCodeOld.clone().attr('colspan', 1);
+        $row.append($lineNumOld).append($lineCodeOld)
+            .append($lineNumNew).append($lineCodeNew);
+        $row = $row.next();
+      } else if ($row.hasClass('inline-comments')) {
+        $row.find('td').attr('colspan', 2);
+        $row.append($('<td class="empty-line" colspan="2"></td>'));
+        $row = $row.next();
+      } else if ($row.hasClass('show-lines')) {
+        $row.find('td').attr('colspan', 4);
+        $row = $row.next();
+      } else {
+        if ($row.length) {
+          console.error('There should not be any row types except the above');
+        }
+        break;
+      }
+    }
+
+    //$('tbody tr', $(this)).each(function() {
+    //  if ($(this).hasClass('inline-comments')) {
+    //    splitInlineComment($(this));
+    //  } else {
+    //    splitDiffLine($(this))
+    //  }
+    //});
   })
 }
 
@@ -490,45 +636,69 @@ function resetDiffs() {
   })
 }
 
-function splitDiffLine($line) {
-  var $children = $line.children();
-
-  var $oldNumber = $($children[0]);
-  var $newNumber = $($children[1]);
-  var $LOC = $($children[2]);
-
-  var $oldLOC = $('<td class="diff-line-code"></td>');
-  var $newLOC = $('<td class="diff-line-code"></td>');
-
-  if ($line.hasClass('gd')) {
-    $oldLOC.html($LOC.html());
-    $newLOC.addClass('nd');
-    $newNumber.addClass('nd');
-    $newLOC.html('');
-  } else if ($line.hasClass('gi')) {
-    $oldLOC.html('');
-    $newLOC.html($LOC.html());
-    $oldLOC.addClass('nd');
-    $oldNumber.addClass('nd');
-  } else {
-    if ($line.hasClass('gc')) {
-      $oldLOC.addClass('gc');
-      $newLOC.addClass('gc');
-    }
-    $oldLOC.html($LOC.html());
-    $newLOC.html($LOC.html());
+function splitRow($row, $left, $right) {
+  if ($left.hasClass('inline-comments')) {
+    $left.find('td').attr('colspan', 2);
+    $row.append($left.find('td'));
+  } else if ($left.hasClass('gd')) {
+    var $lineNum = $left.find('td').eq(0).attr('colspan', 1).addClass('gd');
+    var $lineCode = $left.find('td').eq(2).attr('colspan', 1).addClass('gd');
+    $row.append($lineNum).append($lineCode);
+  } else /* empty line */ {
+    $row.append($('<td class="empty-line" colspan="2"></td>'));
   }
 
-  $newNumber.addClass('new-number');
-
-  if($oldLOC.children().first().hasClass('add-bubble')) {
-    $oldLOC.children().first().remove();
+  if ($right.hasClass('inline-comments')) {
+    $right.find('td').attr('colspan', 2);
+    $row.append($right.find('td'));
+  } else if ($right.hasClass('gi')) {
+    var $lineNum = $right.find('td').eq(1).attr('colspan', 1).addClass('gi');
+    var $lineCode = $right.find('td').eq(2).attr('colspan', 1).addClass('gi');
+    $row.append($lineNum).append($lineCode);
+  } else /* empty line */ {
+    $row.append($('<td class="empty-line" colspan="2"></td>'));
   }
-
-  $oldLOC.insertAfter($oldNumber);
-  $newLOC.insertAfter($newNumber);
-  $LOC.remove();
 }
+
+//function splitDiffLine($line) {
+//  var $children = $line.children();
+//
+//  var $oldNumber = $($children[0]);
+//  var $newNumber = $($children[1]);
+//  var $LOC = $($children[2]);
+//
+//  var $oldLOC = $('<td class="diff-line-code"></td>');
+//  var $newLOC = $('<td class="diff-line-code"></td>');
+//
+//  if ($line.hasClass('gd')) {
+//    $oldLOC.html($LOC.html());
+//    $newLOC.addClass('nd');
+//    $newNumber.addClass('nd');
+//    $newLOC.html('');
+//  } else if ($line.hasClass('gi')) {
+//    $oldLOC.html('');
+//    $newLOC.html($LOC.html());
+//    $oldLOC.addClass('nd');
+//    $oldNumber.addClass('nd');
+//  } else {
+//    if ($line.hasClass('gc')) {
+//      $oldLOC.addClass('gc');
+//      $newLOC.addClass('gc');
+//    }
+//    $oldLOC.html($LOC.html());
+//    $newLOC.html($LOC.html());
+//  }
+//
+//  $newNumber.addClass('new-number');
+//
+//  if($oldLOC.children().first().hasClass('add-bubble')) {
+//    $oldLOC.children().first().remove();
+//  }
+//
+//  $oldLOC.insertAfter($oldNumber);
+//  $newLOC.insertAfter($newNumber);
+//  $LOC.remove();
+//}
 
 function resetDiffLine($line) {
   var $children = $line.children();
