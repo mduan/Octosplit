@@ -48,7 +48,8 @@ var FileState = (function FileStateClosure() {
         var missingRange = {
           old: 0,
           new: 0,
-          length: belowIndicies.new
+          length: belowIndicies.new,
+          isEnd: false
         };
       } else {
         var missingRange = {
@@ -58,12 +59,29 @@ var FileState = (function FileStateClosure() {
         };
       }
 
+      missingRange.$statLine = $statLine;
+      missingRanges.push(missingRange);
+    }
+
+    var $lastLine = this.$fileDiff.find('tbody tr:last');
+    var lastLineIndicies = this.parseLineIndicies($lastLine);
+    var missingRange = {
+      old: lastLineIndicies.old + 1,
+      new: lastLineIndicies.new + 1,
+      length: -1,
+      isEnd: true
+    };
+    missingRange.$lastLine = $lastLine;
+    missingRanges.push(missingRange);
+
+    for (var i = 0; i < missingRanges.length; ++i) {
+      var missingRange = missingRanges[i];
       var $showLinesRow = $(
         '<tr class="show-lines">'
         + '<td colspan="3">'
-        + ' <a class="show-above-20" href="#">▲ Show 20 lines</a> • '
-        + ' <a class="show-all" href="#">Show all lines</a> • '
-        + ' <a class="show-below-20" href="#">▼ Show 20 lines</a>'
+        + ' <a class="show-above-20" href="#"></a> • '
+        + ' <a class="show-all" href="#"></a> • '
+        + ' <a class="show-below-20" href="#"></a>'
         + '</td>'
         + '</tr>'
       );
@@ -73,41 +91,45 @@ var FileState = (function FileStateClosure() {
           this.showAll.bind(this, missingRange));
       $showLinesRow.find('.show-below-20').click(
           this.showBelow20.bind(this, missingRange));
-      $statLine.replaceWith($showLinesRow);
+
+      this.updateShowLinesRow($showLinesRow, missingRange);
+      if (missingRange.$lastLine) {
+        missingRange.$lastLine.after($showLinesRow);
+      } else {
+        missingRange.$statLine.replaceWith($showLinesRow);
+      }
       missingRange.$showLinesRow = $showLinesRow;
-      missingRanges.push(missingRange);
     }
-
-    // TODO(mack): Merge logic for last row with previous code
-    var $showLinesRow = $(
-      '<tr class="show-lines">'
-      + '<td colspan="3">'
-      + ' <a class="show-above-20" href="#">▲ Show 20 lines</a> • '
-      + ' <a class="show-all" href="#">Show all lines</a> • '
-      + ' <a class="show-below-20" href="#">▼ Show 20 lines</a>'
-      + '</td>'
-      + '</tr>'
-    );
-    var $lastLine = this.$fileDiff.find('tbody tr:last');
-    var lastLineIndicies = this.parseLineIndicies($lastLine);
-    var missingRange = {
-      old: lastLineIndicies.old + 1,
-      new: lastLineIndicies.new + 1,
-      length: -1
-    };
-    $lastLine.after($showLinesRow);
-
-    $showLinesRow.find('.show-above-20').click(
-        this.showAbove20.bind(this, missingRange));
-    $showLinesRow.find('.show-all').click(
-        this.showAll.bind(this, missingRange));
-    $showLinesRow.find('.show-below-20').click(
-        this.showBelow20.bind(this, missingRange));
-    missingRange.$showLinesRow = $showLinesRow;
-    missingRanges.push(missingRange);
   }
 
   FileState.prototype = {
+
+    updateShowLinesRow: function($showLinesRow, missingRange) {
+
+      if (missingRange.isEnd && missingRange.length < 0) {
+          $showLinesRow.find('.show-all').text('Show all remaining lines');
+      } else {
+        $showLinesRow.find('.show-all').text(
+            'Show all ' + missingRange.length + ' lines');
+      }
+
+      if (missingRange.length >= 0 && missingRange.length < 40) {
+        $showLinesRow.find('.show-above-20').remove();
+        $showLinesRow.find('.show-below-20').remove();
+      } else {
+        if (missingRange.isEnd) {
+          $showLinesRow.find('.show-above-20').text('▲ Show 20 lines');
+          $showLinesRow.find('.show-below-20').text('Show last 20 lines');
+        } else if (missingRange.new === 0) {
+          $showLinesRow.find('.show-above-20').text('Show first 20 lines');
+          $showLinesRow.find('.show-below-20').text('▼ Show 20 lines');
+        } else {
+          $showLinesRow.find('.show-above-20').text('▲ Show 20 lines');
+          $showLinesRow.find('.show-below-20').text('▼ Show 20 lines');
+        }
+      }
+    },
+
     showAbove20: function(missingRange) {
       return this.showLines(missingRange, 'above', 20);
     },
@@ -154,22 +176,28 @@ var FileState = (function FileStateClosure() {
               old: missingRange.old + missingRange.length - numLines,
               length: numLines
             };
+            missingRange.isEnd = false;
           }
           showRange.length = numLines;
           missingRange.length -= numLines;
         }
 
+        var $showLinesRow = missingRange.$showLinesRow;
+
         var $lines = this.getLines(fileLines, showRange);
         if (mode === 'below') {
-          $lines.insertAfter(missingRange.$showLinesRow);
+          $lines.insertAfter($showLinesRow);
         } else {
-          $lines.insertBefore(missingRange.$showLinesRow);
+          $lines.insertBefore($showLinesRow);
         }
 
         if (removeShowLinesRow) {
           // TODO(mack): unbind event listeners
-          missingRange.$showLinesRow.remove();
+          $showLinesRow.remove();
+        } else {
+          this.updateShowLinesRow($showLinesRow, missingRange);
         }
+
       }.bind(this));
       return false;
     },
