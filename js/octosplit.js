@@ -1,10 +1,21 @@
 $(document).ready(function() {
-  addWordWrapChekbox();
-  addCheckbox();
+  addWordWrapCheckbox();
+  addSideBySideCheckbox();
   manageNewComment();
   manageTabs();
   addShowLines();
   $('.inline-comments').addClass('show');
+  getSettings(['side_by_side', 'word_wrap']).then(function(settings) {
+    var sideBySide = settings['side_by_side'];
+    if (sideBySide) {
+      $('#octosplit').click();
+    }
+
+    var wordWrap = settings['word_wrap'];
+    if (wordWrap) {
+      $('#wordwrap').click();
+    }
+  });
 });
 
 var FileState = (function FileStateClosure() {
@@ -258,6 +269,35 @@ var FileState = (function FileStateClosure() {
   return FileState;
 })();
 
+function getSetting(key) {
+  return getSettings([key]).then(function(settings) {
+    return settings[key];
+  });
+}
+
+function getSettings(keys) {
+  var deferred = new $.Deferred();
+  chrome.storage.sync.get(keys, function(settings) {
+    deferred.resolve(settings);
+  });
+  return deferred.promise();
+}
+
+function saveSetting(key, value) {
+  var settings = {};
+  settings[key] = value;
+  return saveSettings(settings);
+}
+
+function saveSettings(settings) {
+  var deferred = new $.Deferred();
+  chrome.storage.sync.set(settings, function() {
+    deferred.resolve();
+  });
+  return deferred.promise();
+}
+
+
 var fileStates = [];
 function addShowLines() {
   $('table.file-diff').each(function() {
@@ -271,7 +311,7 @@ function updateShowLines(inlineMode) {
   }
 }
 
-function addWordWrapChekbox() {
+function addWordWrapCheckbox() {
   var $checkbox = $('<input type="checkbox" id="wordwrap" />');
   var $label    = $('<label id="wordwrap-label" for="wordwrap"><span class="mini-icon mini-icon-reorder"></span>word wrap</label>');
 
@@ -279,14 +319,24 @@ function addWordWrapChekbox() {
 
   $checkbox.on('click', function(event) {
     if ($(this).is(':checked')) {
-       $('#files').addClass('word-wrap');
+      saveSetting('word_wrap', true);
+      enableWordWrap();
     } else {
-       $('#files').removeClass('word-wrap');
+      saveSetting('word_wrap', false);
+      disableWordWrap();
     }
   });
 }
 
-function addCheckbox() {
+function enableWordWrap() {
+  $('#files').addClass('word-wrap');
+}
+
+function disableWordWrap() {
+  $('#files').removeClass('word-wrap');
+}
+
+function addSideBySideCheckbox() {
   var $checkbox = $('<input type="checkbox" id="octosplit" />');
   var $label    = $('<label id="octosplit-label" for="octosplit"><span class="mini-icon mini-icon-public-mirror"></span>side by side</label>');
 
@@ -294,15 +344,25 @@ function addCheckbox() {
 
   $checkbox.on('click', function(event) {
     if ($(this).is(':checked')) {
-      enlarge();
-      splitDiffs();
-      updateShowLines(false);
+      saveSetting('side_by_side', true);
+      enableSideBySide();
     } else {
-      shrink();
-      resetDiffs();
-      updateShowLines(true);
+      saveSetting('side_by_side', false);
+      disableSideBySide();
     }
   });
+}
+
+function enableSideBySide() {
+  enlarge();
+  splitDiffs();
+  updateShowLines(false);
+}
+
+function disableSideBySide() {
+  shrink();
+  resetDiffs();
+  updateShowLines(true);
 }
 
 function manageNewComment() {
