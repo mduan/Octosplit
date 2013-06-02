@@ -4,6 +4,7 @@ $(document).ready(function() {
   manageNewComment();
   manageTabs();
   addShowLines();
+  $('.inline-comments').addClass('show');
 });
 
 var FileState = (function FileStateClosure() {
@@ -305,18 +306,21 @@ function addCheckbox() {
 }
 
 function manageNewComment() {
-  $('#files').on('click', function(event) {
-    if (!$('#octosplit').is(':checked')) {
-      return;
-    }
+  $('#files').on('click', '.add-line-comment', function(evt) {
+    var $elmt = $(this);
 
-    $elmt = $(event.target);
-    if (!$elmt.hasClass('add-line-comment')) {
+    if (!$('#octosplit').is(':checked')) {
+      window.setTimeout(function() {
+        var $inlineComments = $elmt.closest('.file-diff-line').next();
+        $inlineComments.addClass('show');
+      }, 800);
       return;
     }
 
     window.setTimeout(function() {
-      splitInlineComment($($elmt.parent().parent().next()));
+      var $inlineComments = $elmt.closest('.file-diff-line').next();
+      $inlineComments.addClass('show');
+      splitInlineComment($inlineComments);
     }, 800);
   });
 }
@@ -429,14 +433,19 @@ function resetDiffLine($line) {
   $newLOC.removeClass('nd');
 }
 
-function splitInlineComment($line) {
-  $line.children().first().attr('colspan', 1);
-  $line.children().last().attr('colspan', 3);
+function splitInlineComment($inlineComments) {
+  var insertion = $inlineComments.prev().hasClass('gi');
+  $inlineComments.find('.comment-count').attr('colspan', 1);
+  if (insertion) {
+    $inlineComments.prepend($('<td class="placeholder" colspan="2">'));
+  } else {
+    $inlineComments.append($('<td class="placeholder" colspan="2">'));
+  }
 }
 
-function resetInlineComment($line) {
-  $line.children().first().attr('colspan', 2);
-  $line.children().last().attr('colspan', 1);
+function resetInlineComment($inlineComments) {
+  $inlineComments.find('.placeholder').remove();
+  $inlineComments.find('.comment-count').attr('colspan', 2);
 }
 
 function isFilesBucketTab() {
