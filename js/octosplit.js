@@ -32,30 +32,64 @@ var FileState = (function FileStateClosure() {
     var prevIndicies = { old: null, new: null };
     for (var i = 0; i < $statLines.length; ++i) {
       var $statLine = $statLines.eq(i);
-      var $aboveLine = $statLine.prev();
-      var $belowLine = $statLine.next();
-      if ($aboveLine.length) {
-        var aboveIndicies = this.parseLineIndicies($aboveLine);
-      }
-      if ($belowLine.length) {
-        var belowIndicies = this.parseLineIndicies($belowLine);
-      }
 
-      if (!belowIndicies) {
-        console.error('Did not find lines below comment line');
-        continue;
-      } else if (!aboveIndicies) {
+      // TODO(mack): This logic assumes that if there are any unchanged lines
+      // above/below, at least one unchanged line will be shown; otherwise
+      // it might be necessary to search in the opposite direction to get line
+      // index
+      var aboveOldIndex = this.parseLineIndex(
+          $statLine.prevAll(':not(.gi)').first(), 0);
+      var aboveNewIndex = this.parseLineIndex(
+          $statLine.prevAll(':not(.gd)').first(), 1);
+      var belowOldIndex = this.parseLineIndex(
+          $statLine.nextAll(':not(.gi)').first(), 0);
+      var belowNewIndex = this.parseLineIndex(
+          $statLine.nextAll(':not(.gd)').first(), 1);
+
+      if (i === 0) {
+        var length = belowNewIndex || belowOldIndex;
+        if (!length) {
+          $statLine.remove();
+          continue;
+        }
         var missingRange = {
           old: 0,
           new: 0,
-          length: belowIndicies.new,
+          length: length,
           isEnd: false
         };
       } else {
+        if (missingRanges.length) {
+          var prevMissingRange = missingRanges[missingRanges.length - 1];
+          if (isNaN(aboveNewIndex)) {
+            aboveNewIndex = prevMissingRange.new + prevMissingRange.length - 1;
+          }
+          if (isNaN(aboveOldIndex)) {
+            aboveOldIndex = prevMissingRange.old + prevMissingRange.length - 1;
+          }
+        } else {
+          if (isNaN(aboveNewIndex)) {
+            aboveNewIndex = -1;
+          }
+          if (isNaN(aboveOldIndex)) {
+            aboveOldIndex = -1;
+          }
+        }
+
+        if (!isNaN(belowNewIndex)) {
+          var length = belowNewIndex - (aboveNewIndex + 1);
+        } else if (!isNaN(belowOldIndex)) {
+          var length = belowOldIndex - (aboveOldIndex + 1);
+        } else {
+          console.error('Unexpected condition');
+          continue;
+        }
+
         var missingRange = {
-          old: aboveIndicies.old + 1,
-          new: aboveIndicies.new + 1,
-          length: belowIndicies.new - (aboveIndicies.new + 1)
+          old: aboveOldIndex + 1,
+          new: aboveNewIndex + 1,
+          length: length,
+          isEnd: false
         };
       }
 
@@ -64,7 +98,7 @@ var FileState = (function FileStateClosure() {
     }
 
     var $lastLine = this.$fileDiff.find('tbody tr:last');
-    var lastLineIndicies = this.parseLineIndicies($lastLine);
+    var lastLineIndicies = this.parseLineIndex($lastLine);
     var missingRange = {
       old: lastLineIndicies.old + 1,
       new: lastLineIndicies.new + 1,
@@ -267,14 +301,9 @@ var FileState = (function FileStateClosure() {
       return this.fileDataPromise;
     },
 
-    parseLineIndicies: function($row) {
-      var $lineNumbers = $row.find('td');
-      var oldLineIndex = parseInt($lineNumbers.eq(0).attr('data-line-number'), 10) - 1;
-      var newLineIndex = parseInt($lineNumbers.eq(1).attr('data-line-number'), 10) - 1;
-      return {
-        old: oldLineIndex,
-        new: newLineIndex
-      };
+    parseLineIndex: function($row, rowIndex) {
+      return parseInt(
+          $row.find('td').eq(rowIndex).attr('data-line-number'), 10) - 1;
     },
 
     parseFileIndex: function() {
