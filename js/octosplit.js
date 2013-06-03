@@ -598,8 +598,10 @@ function splitDiffs() {
             .append($lineNumNew).append($lineCodeNew);
         $row = $row.next();
       } else if ($row.hasClass('inline-comments')) {
-        $row.find('td').attr('colspan', 2);
-        $row.append($('<td class="empty-line" colspan="2"></td>'));
+        $row.find('td').eq(0).attr('colspan', 1);
+        $row.find('td').eq(1).attr('colspan', 1);
+        $row.append($('<td class="empty-num" colspan="1"></td>'))
+            .append($('<td class="empty-line" colspan="1"></td>'));
         $row = $row.next();
       } else if ($row.hasClass('show-lines')) {
         $row.find('td').attr('colspan', 4);
@@ -611,52 +613,108 @@ function splitDiffs() {
         break;
       }
     }
-
-    //$('tbody tr', $(this)).each(function() {
-    //  if ($(this).hasClass('inline-comments')) {
-    //    splitInlineComment($(this));
-    //  } else {
-    //    splitDiffLine($(this))
-    //  }
-    //});
-  })
+  });
 }
 
 function resetDiffs() {
   $('table.file-diff').each(function() {
-    if (isResettable($(this))) {
-      $('tbody tr', $(this)).each(function() {
-        if ($(this).hasClass('inline-comments')) {
-          resetInlineComment($(this));
-        } else {
-          resetDiffLine($(this))
+    var $this = $(this);
+    // TODO(mack): Add check for isResettable
+    // if (!isResettable($(this))) {
+    //   return;
+    // }
+
+    var $row = $this.find('tr:first');
+    while ($row.length) {
+      if ($row.hasClass('show-lines')) {
+        $row.find('td').attr('colspan', 3);
+        $row = $row.next();
+      } else if ($row.hasClass('inline-comments')) {
+        // TODO(mack): line-comments each colspan
+        $row.find('td:eq(2), td:eq(3)').remove();
+        $row.find('td').eq(0).attr('colspan', 2);
+        $row.find('td').eq(1).attr('colspan', 1);
+        $row = $row.next();
+      } else if ($row.find('td.gd, td.gi').length) {
+        var $newRows = $('<div/>');
+        var $prevRow = $row.prev();
+        while ($row.find('.line-comments, td.gd, td.gi').length) {
+          $row = $row.next();
         }
-      });
+        var $delRows = $('<div/>');
+        var $insRows = $('<div/>');
+        var $delInsRows = $prevRow.nextUntil($row);
+        $delInsRows.each(function() {
+          var $this = $(this);
+
+          var $delCol = $this.find('td:eq(1)');
+          if ($delCol.hasClass('gd')) {
+            var $delRow = $('<tr class="file-diff-line gd" />')
+              .append($this.find('td:eq(0)').attr('colspan', 1))
+              .append($('<td class="diff-line-num linkable-line-number" empty-cell" />'))
+              .append($delCol.removeClass('gd').attr('colspan', 1));
+            $delRows.append($delRow);
+          } else if ($delCol.hasClass('line-comments')) {
+            var $delRow = $('<tr class="inline-comments" />')
+              .append($this.find('td:eq(0)').attr('colspan', 1))
+              .append($delCol.attr('colspan', 1));
+            $delRows.append($delRow);
+          } else /* empty line */ {
+          }
+
+          var $insCol = $this.find('td:eq(3)');
+          if ($insCol.hasClass('gi')) {
+            var $insRow = $('<tr class="file-diff-line gi" />')
+              .append($('<td class="diff-line-num linkable-line-number" empty-cell" />'))
+              .append($this.find('td:eq(2)').attr('colspan', 1))
+              .append($insCol.removeClass('gi').attr('colspan', 1));
+            $insRows.append($insRow);
+          } else if ($insCol.hasClass('line-comments')) {
+            var $insRow = $('<tr class="inline-comments" />')
+              .append($this.find('td:eq(2)').attr('colspan', 1))
+              .append($insCol.attr('colspan', 1));
+            $insRows.append($insRow);
+          } else /* empty line */ {
+          }
+        });
+
+        $delInsRows.remove();
+        $row.before($delRows.children());
+        $row.before($insRows.children());
+      } else /* unchanged line */ {
+        $row.find('td').eq(1).remove();
+        $row.find('td').attr('colspan', 1);
+        $row = $row.next();
+      }
     }
-  })
+  });
 }
 
 function splitRow($row, $left, $right) {
   if ($left.hasClass('inline-comments')) {
-    $left.find('td').attr('colspan', 2);
+    $left.find('td').eq(0).attr('colspan', 1);
+    $left.find('td').eq(1).attr('colspan', 1);
     $row.append($left.find('td'));
   } else if ($left.hasClass('gd')) {
     var $lineNum = $left.find('td').eq(0).attr('colspan', 1).addClass('gd');
     var $lineCode = $left.find('td').eq(2).attr('colspan', 1).addClass('gd');
     $row.append($lineNum).append($lineCode);
   } else /* empty line */ {
-    $row.append($('<td class="empty-line" colspan="2"></td>'));
+    $row.append($('<td class="empty-num" colspan="1"></td>'))
+        .append($('<td class="empty-line" colspan="1"></td>'));
   }
 
   if ($right.hasClass('inline-comments')) {
-    $right.find('td').attr('colspan', 2);
+    $right.find('td').eq(0).attr('colspan', 1);
+    $right.find('td').eq(1).attr('colspan', 1);
     $row.append($right.find('td'));
   } else if ($right.hasClass('gi')) {
     var $lineNum = $right.find('td').eq(1).attr('colspan', 1).addClass('gi');
     var $lineCode = $right.find('td').eq(2).attr('colspan', 1).addClass('gi');
     $row.append($lineNum).append($lineCode);
   } else /* empty line */ {
-    $row.append($('<td class="empty-line" colspan="2"></td>'));
+    $row.append($('<td class="empty-num" colspan="1"></td>'))
+        .append($('<td class="empty-line" colspan="1"></td>'));
   }
 }
 

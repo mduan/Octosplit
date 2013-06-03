@@ -49,3 +49,7 @@
 .inline-comments .placeholder {
   background-color: white;
 }
+
+.empty-num, .empty-line {
+  background-color: white;
+}
