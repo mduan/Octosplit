@@ -319,55 +319,6 @@ var FileState = (function FileStateClosure() {
   return FileState;
 })();
 
-//var ViewState = (function ViewStateClosure() {
-//  function ViewState($fileDiff) {
-//    this.$fileDiff = $fileDiff;
-//    this.rawLinesGroups = [];
-//
-//    var $firstLine = $fileDiff.find('.gd:first, .gi:first').first();
-//    while ($firstLine.length) {
-//      var $rawLines = $firstLine.prev().nextUntil(':not(.gd, .gi)');
-//      this.rawLinesGroups.push($rawLines);
-//      console.log('raw', $rawLines);
-//      $firstLine = $rawLines.last().nextAll('.gd:first, .gi:first').first();
-//    }
-//
-//    this.textGroups = [];
-//    for (var i = 0; i < this.rawLinesGroups.length; ++i) {
-//      var $rawLines = this.rawLinesGroups[i];
-//      var oldLines = [];
-//      $rawLines.filter('.gd').each(function() {
-//        oldLines.push($(this).find('.diff-line-code').text());
-//      });
-//      var newLines = [];
-//      $rawLines.filter('.gi').each(function() {
-//        newLines.push($(this).find('.diff-line-code').text());
-//      });
-//      this.textGroups.push({
-//        oldLines: oldLines,
-//        newLines: newLines
-//      });
-//    }
-//
-//    for (var i = 0; i < this.textGroups.length; ++i) {
-//      var textGroup = this.textGroups[i];
-//      var sequenceMatcher = new difflib.SequenceMatcher(
-//          textGroup.oldLines, textGroup.newLines);
-//      var opcodes = sequenceMatcher.get_opcodes();
-//      console.log('old', textGroup.oldLines);
-//      console.log('new', textGroup.newLines);
-//      console.log('opcodes', opcodes);
-//      if (i >= 2) {
-//        break;
-//      }
-//    }
-//  }
-//
-//  ViewState.prototype = {};
-//
-//  return ViewState;
-//})();
-
 function getSetting(key) {
   return getSettings([key]).then(function(settings) {
     return settings[key];
@@ -716,66 +667,6 @@ function splitRow($row, $left, $right) {
     $row.append($('<td class="empty-num" colspan="1"></td>'))
         .append($('<td class="empty-line" colspan="1"></td>'));
   }
-}
-
-//function splitDiffLine($line) {
-//  var $children = $line.children();
-//
-//  var $oldNumber = $($children[0]);
-//  var $newNumber = $($children[1]);
-//  var $LOC = $($children[2]);
-//
-//  var $oldLOC = $('<td class="diff-line-code"></td>');
-//  var $newLOC = $('<td class="diff-line-code"></td>');
-//
-//  if ($line.hasClass('gd')) {
-//    $oldLOC.html($LOC.html());
-//    $newLOC.addClass('nd');
-//    $newNumber.addClass('nd');
-//    $newLOC.html('');
-//  } else if ($line.hasClass('gi')) {
-//    $oldLOC.html('');
-//    $newLOC.html($LOC.html());
-//    $oldLOC.addClass('nd');
-//    $oldNumber.addClass('nd');
-//  } else {
-//    if ($line.hasClass('gc')) {
-//      $oldLOC.addClass('gc');
-//      $newLOC.addClass('gc');
-//    }
-//    $oldLOC.html($LOC.html());
-//    $newLOC.html($LOC.html());
-//  }
-//
-//  $newNumber.addClass('new-number');
-//
-//  if($oldLOC.children().first().hasClass('add-bubble')) {
-//    $oldLOC.children().first().remove();
-//  }
-//
-//  $oldLOC.insertAfter($oldNumber);
-//  $newLOC.insertAfter($newNumber);
-//  $LOC.remove();
-//}
-
-function resetDiffLine($line) {
-  var $children = $line.children();
-
-  var $oldNumber = $($children[0]);
-  var $oldLOC    = $($children[1]);
-  var $newNumber = $($children[2]);
-  var $newLOC    = $($children[3]);
-
-  if($line.hasClass('gd')) {
-    $newLOC.html($oldLOC.html());
-  }
-
-  $oldLOC.remove();
-
-  $oldNumber.removeClass('nd');
-  $oldNumber.css('border-right', 'none');
-  $newNumber.removeClass('nd');
-  $newLOC.removeClass('nd');
 }
 
 function splitInlineComment($inlineComments) {
