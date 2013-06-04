@@ -429,9 +429,26 @@ function manageNewComment() {
     }
 
     window.setTimeout(function() {
+      console.log('at 1');
       var $inlineComments = $elmt.closest('.file-diff-line').next();
       $inlineComments.addClass('show');
-      splitInlineComment($inlineComments);
+      //splitInlineComment($inlineComments);
+      var $lineCode = $elmt.closest('.diff-line-code');
+      if ($lineCode.index() === 1) {
+        // Left column
+        $inlineComments.find('td').eq(0).attr('colspan', 1);
+        $inlineComments.find('td').eq(1).attr('colspan', 1);
+        $inlineComments.append($('<td class="empty-num" colspan="1"></td>'))
+            .append($('<td class="empty-line" colspan="1"></td>'));
+      } else {
+        console.log('at 2');
+        // Right column
+        $inlineComments.find('td').eq(0).attr('colspan', 1);
+        $inlineComments.find('td').eq(1).attr('colspan', 1);
+        $inlineComments
+            .prepend($('<td class="empty-line" colspan="1"></td>'))
+            .prepend($('<td class="empty-num" colspan="1"></td>'));
+      }
     }, 800);
   });
 }
@@ -489,7 +506,7 @@ function splitDiffs() {
         while (true) {
           // Do something
           if ($deleteRow.hasClass('inline-comments')) {
-            var $newRow = $('<tr class="inline-comments"></tr>');
+            var $newRow = $('<tr />').addClass($deleteRow[0].className);
             if ($insertRow.hasClass('inline-comments')) {
               $insertRow = $insertRow.next();
               $deleteRow = $deleteRow.next();
@@ -499,7 +516,7 @@ function splitDiffs() {
               splitRow($newRow, $deleteRow.prev(), $());
             }
           } else if ($insertRow.hasClass('inline-comments')) {
-            var $newRow = $('<tr class="inline-comments"></tr>');
+            var $newRow = $('<tr />').addClass($insertRow[0].className);
             $insertRow = $insertRow.next();
             splitRow($newRow, $(), $insertRow.prev());
           } else if ($deleteRow.hasClass('gd')) {
@@ -522,7 +539,7 @@ function splitDiffs() {
         // Process remaining .gi
         while (true) {
           if ($insertRow.hasClass('inline-comments')) {
-            var $newRow = $('<tr class="inline-comments"></tr>');
+            var $newRow = $('<tr />').addClass($insertRow[0].className);
             $insertRow = $insertRow.next();
             splitRow($newRow, $(), $insertRow.prev());
           } else if ($insertRow.hasClass('gi')) {
@@ -606,8 +623,9 @@ function resetDiffs() {
               .append($delCol.removeClass('gd').attr('colspan', 1));
             $delRows.append($delRow);
           } else if ($delCol.hasClass('line-comments')) {
-            var $delRow = $('<tr class="inline-comments" />')
-              .append($this.find('td:eq(0)').attr('colspan', 1))
+            var $delRow = $('<tr />')
+              .addClass($delCol.closest('.inline-comments')[0].className)
+              .append($this.find('td:eq(0)').attr('colspan', 2))
               .append($delCol.attr('colspan', 1));
             $delRows.append($delRow);
           } else /* empty line */ {
@@ -621,8 +639,9 @@ function resetDiffs() {
               .append($insCol.removeClass('gi').attr('colspan', 1));
             $insRows.append($insRow);
           } else if ($insCol.hasClass('line-comments')) {
-            var $insRow = $('<tr class="inline-comments" />')
-              .append($this.find('td:eq(2)').attr('colspan', 1))
+            var $insRow = $('<tr />')
+              .addClass($insCol.closest('.inline-comments')[0].className)
+              .append($this.find('td:eq(2)').attr('colspan', 2))
               .append($insCol.attr('colspan', 1));
             $insRows.append($insRow);
           } else /* empty line */ {
@@ -667,21 +686,6 @@ function splitRow($row, $left, $right) {
     $row.append($('<td class="empty-num" colspan="1"></td>'))
         .append($('<td class="empty-line" colspan="1"></td>'));
   }
-}
-
-function splitInlineComment($inlineComments) {
-  var insertion = $inlineComments.prev().hasClass('gi');
-  $inlineComments.find('.comment-count').attr('colspan', 1);
-  if (insertion) {
-    $inlineComments.prepend($('<td class="placeholder" colspan="2">'));
-  } else {
-    $inlineComments.append($('<td class="placeholder" colspan="2">'));
-  }
-}
-
-function resetInlineComment($inlineComments) {
-  $inlineComments.find('.placeholder').remove();
-  $inlineComments.find('.comment-count').attr('colspan', 2);
 }
 
 function isFilesBucketTab() {
