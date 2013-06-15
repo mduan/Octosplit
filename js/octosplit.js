@@ -439,19 +439,16 @@ function manageNewComment() {
     }
 
     window.setTimeout(function() {
-      console.log('at 1');
       var $inlineComments = $elmt.closest('.file-diff-line').next();
       $inlineComments.addClass('show');
-      //splitInlineComment($inlineComments);
       var $lineCode = $elmt.closest('.diff-line-code');
-      if ($lineCode.index() === 1) {
+      if (!$lineCode.hasClass('gi')) {
         // Left column
         $inlineComments.find('td').eq(0).attr('colspan', 1);
         $inlineComments.find('td').eq(1).attr('colspan', 1);
         $inlineComments.append($('<td class="empty-num" colspan="1"></td>'))
             .append($('<td class="empty-line" colspan="1"></td>'));
       } else {
-        console.log('at 2');
         // Right column
         $inlineComments.find('td').eq(0).attr('colspan', 1);
         $inlineComments.find('td').eq(1).attr('colspan', 1);
