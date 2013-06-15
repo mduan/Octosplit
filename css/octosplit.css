@@ -36,10 +36,16 @@
   background-color: white;
 }
 
-.show-lines {
-  border-top: 1px solid #e5e5e5;
-  border-bottom: 1px solid #e5e5e5;
+#files .show-lines td {
   text-align: center;
+  border-top: 1px solid #cca;
+  border-bottom: 1px solid #cca;
+  background-color: #ffe;
+  padding: 1em 0;
+}
+
+#files .show-lines.last td {
+  border-bottom: 0;
 }
 
 .inline-comments:not(.show) {
@@ -52,4 +58,36 @@
 
 .empty-num, .empty-line {
   background-color: white;
+}
+
+.side-by-side .file-diff td {
+  border-right: 1px solid #e5e5e5;
+}
+
+.side-by-side .file-diff td:nth-child(1),
+.side-by-side .file-diff td:nth-child(3) {
+  text-align: right;
+  background: #eee;
+  border-right: 1px solid #ccc;
+  padding: 2px 6px 0 0;
+  min-width: 35px;
+  max-width: 5%;
+}
+
+.side-by-side .file-diff td {
+  word-break: break-all;
+  word-wrap: break-word;
+}
+
+.side-by-side .file-diff td:nth-child(2) {
+  width: 45%;
+}
+
+.side-by-side .file-diff td:last-child {
+  width: 45%;
+  border-right: 0;
+}
+
+.file-diff .file-diff-line .diff-line-num {
+  color: rgba(0, 0, 0, 0.3);
 }

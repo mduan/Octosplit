@@ -112,8 +112,10 @@ var FileState = (function FileStateClosure() {
       var $showLinesRow = $(
         '<tr class="show-lines">'
         + '<td colspan="3">'
-        + ' <a class="show-above-20" href="#"></a> • '
-        + ' <a class="show-all" href="#"></a> • '
+        + ' <a class="show-above-20" href="#"></a>'
+        + ' <span class="dot">•</span>'
+        + ' <a class="show-all" href="#"></a>'
+        + ' <span class="dot">•</span>'
         + ' <a class="show-below-20" href="#"></a>'
         + '</td>'
         + '</tr>'
@@ -128,6 +130,7 @@ var FileState = (function FileStateClosure() {
       this.updateShowLinesRow($showLinesRow, missingRange);
       if (missingRange.$lastLine) {
         missingRange.$lastLine.after($showLinesRow);
+        $showLinesRow.addClass('last');
       } else {
         missingRange.$statLine.replaceWith($showLinesRow);
       }
@@ -149,6 +152,7 @@ var FileState = (function FileStateClosure() {
       if (missingRange.length >= 0 && missingRange.length < 40) {
         $showLinesRow.find('.show-above-20').remove();
         $showLinesRow.find('.show-below-20').remove();
+        $showLinesRow.find('.dot').remove();
       } else {
         if (missingRange.isEnd) {
           $showLinesRow.find('.show-above-20').text('▲ Show 20 lines');
@@ -405,12 +409,14 @@ function addSideBySideCheckbox() {
 }
 
 function enableSideBySide() {
+  $('#files').addClass('side-by-side');
   enlarge();
   splitDiffs();
   updateShowLines(false);
 }
 
 function disableSideBySide() {
+  $('#files').removeClass('side-by-side');
   shrink();
   resetDiffs();
   updateShowLines(true);
