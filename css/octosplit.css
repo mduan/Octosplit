@@ -92,11 +92,11 @@
   border-right: 0;
 }
 
-.side-by-side .diff-line-code {
+.diff-line-code {
   position: relative;
 }
 
-.side-by-side .diff-line-code .add-line-comment {
+.diff-line-code .add-line-comment {
   position: absolute;
   background-color: #f8eec7;
   left: 31px;
