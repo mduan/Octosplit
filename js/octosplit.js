@@ -133,7 +133,11 @@ var FileState = (function FileStateClosure() {
         $showLinesRow.addClass('last');
       } else {
         missingRange.$statLine.replaceWith($showLinesRow);
+        if (missingRange.new === 0) {
+          $showLinesRow.addClass('first');
+        }
       }
+
       missingRange.$showLinesRow = $showLinesRow;
     }
   }
