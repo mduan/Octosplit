@@ -99,7 +99,8 @@
 .diff-line-code .add-line-comment {
   position: absolute;
   background-color: #f8eec7;
-  left: 31px;
+  left: 27px;
+  width: 14px;
 }
 
 .file-diff .file-diff-line .diff-line-num {

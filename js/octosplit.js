@@ -442,6 +442,8 @@ function manageNewComment() {
       var $inlineComments = $elmt.closest('.file-diff-line').next();
       $inlineComments.addClass('show');
       var $lineCode = $elmt.closest('.diff-line-code');
+      // TODO(mack): For non-changed lines, should have comment form shown in
+      // column where the comment icon was clicked
       if (!$lineCode.hasClass('gi')) {
         // Left column
         $inlineComments.find('td').eq(0).attr('colspan', 1);
@@ -622,33 +624,36 @@ function resetDiffs() {
         $delInsRows.each(function() {
           var $this = $(this);
 
+          var $delNum = $this.find('td:eq(0)');
           var $delCol = $this.find('td:eq(1)');
+          var $insNum = $this.find('td:eq(2)');
+          var $insCol = $this.find('td:eq(3)');
+
           if ($delCol.hasClass('gd')) {
             var $delRow = $('<tr class="file-diff-line gd" />')
-              .append($this.find('td:eq(0)').attr('colspan', 1))
+              .append($delNum.attr('colspan', 1))
               .append($('<td class="diff-line-num linkable-line-number" empty-cell" />'))
               .append($delCol.removeClass('gd').attr('colspan', 1));
             $delRows.append($delRow);
           } else if ($delCol.hasClass('line-comments')) {
             var $delRow = $('<tr />')
               .addClass($delCol.closest('.inline-comments')[0].className)
-              .append($this.find('td:eq(0)').attr('colspan', 2))
+              .append($delNum.attr('colspan', 2))
               .append($delCol.attr('colspan', 1));
             $delRows.append($delRow);
           } else /* empty line */ {
           }
 
-          var $insCol = $this.find('td:eq(3)');
           if ($insCol.hasClass('gi')) {
             var $insRow = $('<tr class="file-diff-line gi" />')
               .append($('<td class="diff-line-num linkable-line-number" empty-cell" />'))
-              .append($this.find('td:eq(2)').attr('colspan', 1))
+              .append($insNum.attr('colspan', 1))
               .append($insCol.removeClass('gi').attr('colspan', 1));
             $insRows.append($insRow);
           } else if ($insCol.hasClass('line-comments')) {
             var $insRow = $('<tr />')
               .addClass($insCol.closest('.inline-comments')[0].className)
-              .append($this.find('td:eq(2)').attr('colspan', 2))
+              .append($insNum.attr('colspan', 2))
               .append($insCol.attr('colspan', 1));
             $insRows.append($insRow);
           } else /* empty line */ {
