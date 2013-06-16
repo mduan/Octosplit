@@ -234,13 +234,13 @@ var FileDiffView = React.createClass({
   },
 
   renderInline: function() {
-    var lines = this.state.rows.map(function(row) {
+    var lines = this.state.rows.map(function(row, rowIdx) {
       if (row.type === 'showLines') {
         return this.renderInlineShowLines(row);
       } else if (row.type === 'comments') {
         return this.renderInlineComments(row);
       } else {
-        return this.renderInlineCode(row);
+        return this.renderInlineCode(row, rowIdx);
       }
     }.bind(this));
 
@@ -282,15 +282,13 @@ var FileDiffView = React.createClass({
   restoreComments: function() {
     this.state.rows.forEach(function(row) {
       if (row.type === 'comments') {
-        var $originalElement = row.cells[0].$originalElement;
-        var $element = $originalElement.$element;
-        $element.replaceWith($originalElement);
+        row.cells[0].$element.remove();
       }
     });
   },
 
   componentDidMount: function(rootNode) {
-    this.updateComments();
+    this.updateComments(rootNode);
   },
 
   componentDidUpdate: function(_, _, rootNode) {
@@ -298,40 +296,40 @@ var FileDiffView = React.createClass({
   },
 
   updateComments: function(rootNode) {
-    this.state.rows.forEach(function(row) {
-      if (row.type === 'comments') {
-        try {
-          row.cells[0].newView.getDOMNode();
-          row.cells[0].view = row.cells[0].newView;
-        } catch(e) {
-        }
-        var $originalElement = $(row.cells[0].view.getDOMNode());
-        row.cells[0].$originalElement = $originalElement;
-        var $element = row.cells[0].$element.clone();
-
-        if (this.state.sideBySide) {
-          $element.find('.comment-count').attr('colspan', 1);
-          $element.find('.line-comments').attr('colspan', 1);
-          var $placeholder = [
-            $('<td/>').addClass('empty-cell'),
-            $('<td/>').addClass('empty-line')
-          ];
-          if (row.commentType === 'lineInsertion') {
-            $element.prepend($placeholder);
-          } else {
-            $element.append($placeholder);
-          }
-        } else {
-          $element.find('.empty-cell').remove();
-          $element.find('.empty-line').remove();
-          $element.find('.comment-count').attr('colspan', 2);
-          $element.find('.line-comments').attr('colspan', 1);
-        }
-
-        $originalElement.$element = $element;
-        $originalElement.replaceWith($element);
-        $element.addClass('show');
+    this.state.rows.forEach(function(row, rowIdx) {
+      if (row.type !== 'comments') {
+        return;
       }
+      var $element = row.cells[0].$element.clone();
+      $element.find('.empty-cell').remove();
+      $element.find('.empty-line').remove();
+      row.cells[0].$element = $element;
+
+      if (this.state.sideBySide) {
+        $element.find('.comment-count').attr('colspan', 1);
+        $element.find('.line-comments').attr('colspan', 1);
+        var $placeholder = [
+          $('<td/>').addClass('empty-cell'),
+          $('<td/>').addClass('empty-line')
+        ];
+        if (row.commentType === 'lineInsertion') {
+          $element.prepend($placeholder);
+        } else {
+          $element.append($placeholder);
+        }
+        var $prevRow = $(rootNode)
+            .find('.diff-line-code[data-row-idx=' + (rowIdx - 1) + ']')
+            .closest('.file-diff-line');
+      } else {
+        $element.find('.comment-count').attr('colspan', 2);
+        $element.find('.line-comments').attr('colspan', 1);
+        var $prevRow = $(rootNode)
+            .find('.diff-line-code[data-row-idx=' + (rowIdx - 1) + ']')
+            .closest('.file-diff-line');
+      }
+
+      $element.insertAfter($prevRow);
+      $element.addClass('show');
     }, this);
   },
 
@@ -426,7 +424,7 @@ var FileDiffView = React.createClass({
     return links;
   },
 
-  renderInlineCode: function(row) {
+  renderInlineCode: function(row, rowIdx) {
     if (row.type === 'lineInsertion') {
       var rowClass = 'gi';
     } else if (row.type === 'lineDeletion') {
@@ -442,11 +440,13 @@ var FileDiffView = React.createClass({
 
     if (cells[2].commentUrl) {
       // TODO(mack): see if there's some way to use React to generate markup
-      var commentIconHtml = $('<div/>').append($('<b/>')
-          .addClass('add-line-comment octicon octicon-comment-add')
-          .attr('data-remote', cells[2].commentUrl)).html();
+      var commentIcon = (
+        <b onClick={this.clickAddComment}
+            className="add-line-comment octicon octicon-comment-add"
+            data-remote={row.cells[2].commentUrl}></b>
+      );
     } else {
-      var commentIconHtml = '';
+      var commentIcon = '';
     }
 
     return (
@@ -469,9 +469,10 @@ var FileDiffView = React.createClass({
           </span>
         </td>
 
-        <td className="diff-line-code"
-            dangerouslySetInnerHTML={{
-              __html: commentIconHtml + cells[2].code}}>
+        <td className="diff-line-code" data-row-idx={rowIdx}>
+          {commentIcon}
+          <span dangerouslySetInnerHTML={{ __html: cells[2].code }}>
+          </span>
         </td>
       </tr>
     );
@@ -540,24 +541,22 @@ var FileDiffView = React.createClass({
         while (true) {
           if (rows[deleteRowIdx] &&
               rows[deleteRowIdx].type === 'comments') {
-            //deleteRowIdx++;
-            //continue;
             var rowView = this.renderSideBySideComment(
                 rows[deleteRowIdx++], 'lineDeletion');
           } else if (rows[insertRowIdx] &&
                      rows[insertRowIdx].type === 'comments') {
-            //insertRowIdx++;
-            //continue;
             var rowView = this.renderSideBySideComment(
                 rows[insertRowIdx++], 'lineInsertion');
           } else if (rows[deleteRowIdx] &&
                      rows[deleteRowIdx].type === 'lineDeletion') {
             var rowView = (
               <tr className="file-diff-line">
-                {this.renderSideBySideCode(rows[deleteRowIdx++])}
-                {this.renderSideBySideCode(rows[insertRowIdx++])}
+                {this.renderSideBySideCode(rows[deleteRowIdx], deleteRowIdx)}
+                {this.renderSideBySideCode(rows[insertRowIdx], insertRowIdx)}
               </tr>
             );
+            ++deleteRowIdx;
+            ++insertRowIdx;
           } else {
             deleteRowIdx = NaN;
             break;
@@ -576,22 +575,17 @@ var FileDiffView = React.createClass({
         while (true) {
           if (rows[insertRowIdx] &&
               rows[insertRowIdx].type === 'comments') {
-            //if (window.counter_ === 3) {
-            //  ++insertRowIdx;
-            //  continue;
-            //}
             var rowView = this.renderSideBySideComment(
                 rows[insertRowIdx++], 'lineInsertion');
-            //insertRowIdx++;
-            //continue;
           } else if (rows[insertRowIdx] &&
                      rows[insertRowIdx].type === 'lineInsertion') {
             var rowView = (
               <tr className="file-diff-line">
                 {this.renderSideBySideCode(null)}
-                {this.renderSideBySideCode(rows[insertRowIdx++])}
+                {this.renderSideBySideCode(rows[insertRowIdx], insertRowIdx)}
               </tr>
             );
+            ++insertRowIdx;
           } else {
             insertRowIdx = NaN;
             break;
@@ -603,8 +597,8 @@ var FileDiffView = React.createClass({
       } else if (rows[rowIdx].type === 'lineUnchanged') {
         var rowView = (
           <tr className="file-diff-line">
-            {this.renderSideBySideCode(rows[rowIdx])}
-            {this.renderSideBySideCode(rows[rowIdx])}
+            {this.renderSideBySideCode(rows[rowIdx], rowIdx)}
+            {this.renderSideBySideCode(rows[rowIdx], rowIdx)}
           </tr>
         );
         rowViews.push(rowView);
@@ -613,7 +607,6 @@ var FileDiffView = React.createClass({
         var rowView = this.renderSideBySideComment(
             rows[rowIdx++], 'lineUnchanged');
         rowViews.push(rowView);
-        //++rowIdx;
       } else if (rows[rowIdx].type === 'showLines') {
         var rowView = this.renderSideBySideShowLines(rows[rowIdx++]);
         rowViews.push(rowView);
@@ -629,12 +622,12 @@ var FileDiffView = React.createClass({
     );
   },
 
-  renderSideBySideCode: function(row) {
+  renderSideBySideCode: function(row, rowIdx) {
     if (!row) {
       var rowClass = 'empty-line';
       var lineNumCell = {};
       var code = '';
-      var commentIconHtml = '';
+      var commentIcon = '';
     } else {
       if (row.type === 'lineInsertion') {
         var rowClass = 'gi';
@@ -651,12 +644,14 @@ var FileDiffView = React.createClass({
 
       // TODO(mack): see if there's some way to use React to generate markup
       var code = row.cells[2].code;
-      var commentIconHtml = $('<div/>').append($('<b/>')
-          .addClass('add-line-comment octicon octicon-comment-add')
-          .attr('data-remote', row.cells[2].commentUrl)).html();
+      var commentIcon = (
+        <b onClick={this.clickAddComment}
+            className="add-line-comment octicon octicon-comment-add"
+            data-remote={row.cells[2].commentUrl}></b>
+      );
     }
 
-    return [
+    var ret = [
       <td id={lineNumCell.id}
           className={'diff-line-num linkable-line-number '
             + (lineNumCell.lineNum ? '' : 'empty-cell')}
@@ -666,11 +661,29 @@ var FileDiffView = React.createClass({
         </span>
       </td>,
 
-      <td className={'diff-line-code ' + rowClass}
-          dangerouslySetInnerHTML={{__html: commentIconHtml + code}}>
+      <td className={'diff-line-code ' + rowClass} data-row-idx={rowIdx}>
+        {commentIcon}
+        <span dangerouslySetInnerHTML={{ __html: code }}>
+        </span>
       </td>
     ];
+    return ret;
   },
+
+  clickAddComment: React.autoBind(function(evt) {
+    $target = $(evt.target);
+    window.setTimeout(function() {
+      debugger;
+      var rowIdx = $target.closest('.diff-line-code').data('row-idx');
+      var $row = $target.closest('.file-diff-line').next();
+      $row.remove();
+      this.state.rows.splice(rowIdx + 1, 0, {
+        type: 'comments',
+        cells: [{ $element: $row }]
+      });
+      this.setState({ rows: this.state.rows });
+    }.bind(this), 800);
+  })
 });
 
 function parseFileDiff($fileDiff) {
