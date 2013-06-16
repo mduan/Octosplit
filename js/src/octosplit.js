@@ -237,6 +237,8 @@ var FileDiffView = React.createClass({
     var lines = this.state.rows.map(function(row) {
       if (row.type === 'showLines') {
         return this.renderInlineShowLines(row);
+      } else if (row.type === 'comments') {
+        return this.renderInlineComments(row);
       } else {
         return this.renderInlineCode(row);
       }
@@ -258,6 +260,79 @@ var FileDiffView = React.createClass({
         </td>
       </tr>
     );
+  },
+
+  renderInlineComments: function(row) {
+    var commentsView = (
+      <tr className="inline-comments">
+        <td colSpan={4}></td>
+      </tr>
+    );
+    row.cells[0].newView = commentsView;
+    return commentsView;
+  },
+
+  componentWillMount: function() {
+  },
+
+  componentWillUpdate: function() {
+    this.restoreComments();
+  },
+
+  restoreComments: function() {
+    this.state.rows.forEach(function(row) {
+      if (row.type === 'comments') {
+        var $originalElement = row.cells[0].$originalElement;
+        var $element = $originalElement.$element;
+        $element.replaceWith($originalElement);
+      }
+    });
+  },
+
+  componentDidMount: function(rootNode) {
+    this.updateComments();
+  },
+
+  componentDidUpdate: function(_, _, rootNode) {
+    this.updateComments(rootNode);
+  },
+
+  updateComments: function(rootNode) {
+    this.state.rows.forEach(function(row) {
+      if (row.type === 'comments') {
+        try {
+          row.cells[0].newView.getDOMNode();
+          row.cells[0].view = row.cells[0].newView;
+        } catch(e) {
+        }
+        var $originalElement = $(row.cells[0].view.getDOMNode());
+        row.cells[0].$originalElement = $originalElement;
+        var $element = row.cells[0].$element.clone();
+
+        if (this.state.sideBySide) {
+          $element.find('.comment-count').attr('colspan', 1);
+          $element.find('.line-comments').attr('colspan', 1);
+          var $placeholder = [
+            $('<td/>').addClass('empty-cell'),
+            $('<td/>').addClass('empty-line')
+          ];
+          if (row.commentType === 'lineInsertion') {
+            $element.prepend($placeholder);
+          } else {
+            $element.append($placeholder);
+          }
+        } else {
+          $element.find('.empty-cell').remove();
+          $element.find('.empty-line').remove();
+          $element.find('.comment-count').attr('colspan', 2);
+          $element.find('.line-comments').attr('colspan', 1);
+        }
+
+        $originalElement.$element = $element;
+        $originalElement.replaceWith($element);
+        $element.addClass('show');
+      }
+    }, this);
   },
 
   renderSideBySideShowLines: function(row) {
@@ -402,6 +477,17 @@ var FileDiffView = React.createClass({
     );
   },
 
+  renderSideBySideComment: function(row, type) {
+    row.commentType = type;
+    var commentsView = (
+      <tr className={'inline-comments-placeholder'}>
+        <td colSpan={4}></td>
+      </tr>
+    );
+    row.cells[0].newView = commentsView;
+    return commentsView;
+  },
+
   renderSideBySide: function() {
 
     function nextMatch(predicate, rows, beginIdx) {
@@ -454,14 +540,16 @@ var FileDiffView = React.createClass({
         while (true) {
           if (rows[deleteRowIdx] &&
               rows[deleteRowIdx].type === 'comments') {
-            console.error('Unsupported row type 1');
-            ++deleteRowIdx;
-            continue;
+            //deleteRowIdx++;
+            //continue;
+            var rowView = this.renderSideBySideComment(
+                rows[deleteRowIdx++], 'lineDeletion');
           } else if (rows[insertRowIdx] &&
                      rows[insertRowIdx].type === 'comments') {
-            console.error('Unsupported row type 2');
-            ++insertRowIdx;
-            continue;
+            //insertRowIdx++;
+            //continue;
+            var rowView = this.renderSideBySideComment(
+                rows[insertRowIdx++], 'lineInsertion');
           } else if (rows[deleteRowIdx] &&
                      rows[deleteRowIdx].type === 'lineDeletion') {
             var rowView = (
@@ -488,9 +576,14 @@ var FileDiffView = React.createClass({
         while (true) {
           if (rows[insertRowIdx] &&
               rows[insertRowIdx].type === 'comments') {
-            console.error('Unsupported row type 3');
-            ++insertRowIdx;
-            continue;
+            //if (window.counter_ === 3) {
+            //  ++insertRowIdx;
+            //  continue;
+            //}
+            var rowView = this.renderSideBySideComment(
+                rows[insertRowIdx++], 'lineInsertion');
+            //insertRowIdx++;
+            //continue;
           } else if (rows[insertRowIdx] &&
                      rows[insertRowIdx].type === 'lineInsertion') {
             var rowView = (
@@ -517,12 +610,13 @@ var FileDiffView = React.createClass({
         rowViews.push(rowView);
         ++rowIdx;
       } else if (rows[rowIdx].type === 'comments') {
-        console.error('Unsupported row type 4');
-        ++rowIdx;
-      } else if (rows[rowIdx].type === 'showLines') {
-        var rowView = this.renderSideBySideShowLines(rows[rowIdx]);
+        var rowView = this.renderSideBySideComment(
+            rows[rowIdx++], 'lineUnchanged');
         rowViews.push(rowView);
-        ++rowIdx;
+        //++rowIdx;
+      } else if (rows[rowIdx].type === 'showLines') {
+        var rowView = this.renderSideBySideShowLines(rows[rowIdx++]);
+        rowViews.push(rowView);
       } else {
         console.error('There should not be any row types except the above');
       }
@@ -716,8 +810,12 @@ function parseFileDiff($fileDiff) {
       row.cells.push(parseCodeCell($cells.eq(2)));
 
     } else if ($row.hasClass('inline-comments')) {
+      // TODO(mack): Consider creating JSX representing element rather than
+      // cloning
       row.type = 'comments';
-      row.cells.push($row);
+      row.cells.push({
+        $element: $row
+      });
     } else {
       console.error('Encountered unexpected row type');
     }
@@ -774,27 +872,6 @@ $(document).ready(function() {
   });
 });
 
-//$(document).ready(function() {
-  //addWordWrapCheckbox();
-  //addSideBySideCheckbox();
-  //manageNewComment();
-
-  //manageTabs();
-  //addShowLines();
-  //$('.inline-comments').addClass('show');
-  //getSettings(['sideBySide', 'wordWrap']).then(function(settings) {
-  //  var sideBySide = settings['sideBySide'];
-  //  if (sideBySide) {
-  //    $('#octosplit').click();
-  //  }
-
-  //  var wordWrap = settings['wordWrap'];
-  //  if (wordWrap) {
-  //    $('#wordwrap').click();
-  //  }
-  //});
-//});
-
 function getSetting(key) {
   return getSettings([key]).then(function(settings) {
     return settings[key];
@@ -823,6 +900,26 @@ function saveSettings(settings) {
   return deferred.promise();
 }
 
+//$(document).ready(function() {
+  //addWordWrapCheckbox();
+  //addSideBySideCheckbox();
+  //manageNewComment();
+
+  //manageTabs();
+  //addShowLines();
+  //$('.inline-comments').addClass('show');
+  //getSettings(['sideBySide', 'wordWrap']).then(function(settings) {
+  //  var sideBySide = settings['sideBySide'];
+  //  if (sideBySide) {
+  //    $('#octosplit').click();
+  //  }
+
+  //  var wordWrap = settings['wordWrap'];
+  //  if (wordWrap) {
+  //    $('#wordwrap').click();
+  //  }
+  //});
+//});
 
 //var fileStates = [];
 //function addShowLines() {
@@ -832,68 +929,68 @@ function saveSettings(settings) {
 //  });
 //}
 
-function updateShowLines(inlineMode) {
-  for (var i = 0; i < fileStates.length; ++i) {
-    fileStates[i].setInlineMode(inlineMode);
-  }
-}
-
-function addWordWrapCheckbox() {
-  var $checkbox = $('<input type="checkbox" id="wordwrap" />');
-  var $label    = $('<label id="wordwrap-label" for="wordwrap"><span class="mini-icon mini-icon-reorder"></span>word wrap</label>');
-
-  $('#toc .explain').append($label, $checkbox);
-
-  $checkbox.on('click', function(event) {
-    if ($(this).is(':checked')) {
-      saveSetting('wordWrap', true);
-      enableWordWrap();
-    } else {
-      saveSetting('wordWrap', false);
-      disableWordWrap();
-    }
-  });
-}
-
-function enableWordWrap() {
-  $('#files').addClass('word-wrap');
-}
-
-function disableWordWrap() {
-  $('#files').removeClass('word-wrap');
-}
-
-function addSideBySideCheckbox() {
-  var $checkbox = $('<input type="checkbox" id="octosplit" />');
-  var $label    = $('<label id="octosplit-label" for="octosplit"><span class="mini-icon mini-icon-public-mirror"></span>side by side</label>');
-
-  $('#toc .explain').append($label, $checkbox);
-
-  $checkbox.on('click', function(event) {
-    if ($(this).is(':checked')) {
-      saveSetting('sideBySide', true);
-      enableSideBySide();
-    } else {
-      saveSetting('sideBySide', false);
-      disableSideBySide();
-    }
-  });
-}
-
-function enableSideBySide() {
-  $('#files').addClass('side-by-side');
-  enlarge();
-  splitDiffs();
-  updateShowLines(false);
-}
-
-function disableSideBySide() {
-  $('#files').removeClass('side-by-side');
-  shrink();
-  resetDiffs();
-  updateShowLines(true);
-}
-
+//function updateShowLines(inlineMode) {
+//  for (var i = 0; i < fileStates.length; ++i) {
+//    fileStates[i].setInlineMode(inlineMode);
+//  }
+//}
+//
+//function addWordWrapCheckbox() {
+//  var $checkbox = $('<input type="checkbox" id="wordwrap" />');
+//  var $label    = $('<label id="wordwrap-label" for="wordwrap"><span class="mini-icon mini-icon-reorder"></span>word wrap</label>');
+//
+//  $('#toc .explain').append($label, $checkbox);
+//
+//  $checkbox.on('click', function(event) {
+//    if ($(this).is(':checked')) {
+//      saveSetting('wordWrap', true);
+//      enableWordWrap();
+//    } else {
+//      saveSetting('wordWrap', false);
+//      disableWordWrap();
+//    }
+//  });
+//}
+//
+//function enableWordWrap() {
+//  $('#files').addClass('word-wrap');
+//}
+//
+//function disableWordWrap() {
+//  $('#files').removeClass('word-wrap');
+//}
+//
+//function addSideBySideCheckbox() {
+//  var $checkbox = $('<input type="checkbox" id="octosplit" />');
+//  var $label    = $('<label id="octosplit-label" for="octosplit"><span class="mini-icon mini-icon-public-mirror"></span>side by side</label>');
+//
+//  $('#toc .explain').append($label, $checkbox);
+//
+//  $checkbox.on('click', function(event) {
+//    if ($(this).is(':checked')) {
+//      saveSetting('sideBySide', true);
+//      enableSideBySide();
+//    } else {
+//      saveSetting('sideBySide', false);
+//      disableSideBySide();
+//    }
+//  });
+//}
+//
+//function enableSideBySide() {
+//  $('#files').addClass('side-by-side');
+//  enlarge();
+//  splitDiffs();
+//  updateShowLines(false);
+//}
+//
+//function disableSideBySide() {
+//  $('#files').removeClass('side-by-side');
+//  shrink();
+//  resetDiffs();
+//  updateShowLines(true);
+//}
+//
 //function manageNewComment() {
 //  $('#files').on('click', '.add-line-comment', function(evt) {
 //    var $elmt = $(this);
