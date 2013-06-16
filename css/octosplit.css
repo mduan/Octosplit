@@ -36,7 +36,7 @@
   background-color: white;
 }
 
-#files .show-lines td {
+#files .showLines td {
   text-align: center;
   border-top: 1px solid #cca;
   border-bottom: 1px solid #cca;
@@ -44,12 +44,16 @@
   padding: 1em 0;
 }
 
-#files .show-lines.first td {
+#files .showLines.first td {
   border-top: 0;
 }
 
-#files .show-lines.last td {
+#files .showLines.last td {
   border-bottom: 0;
+}
+
+#files .showLines {
+  font-size: 12px;
 }
 
 .inline-comments:not(.show) {
@@ -111,8 +115,4 @@
 #files .diff-line-code {
   font-family: Menlo, Consolas, Monaco, monospace;
   font-size: 10px;
-}
-
-#files .show-lines {
-  font-size: 12px;
 }

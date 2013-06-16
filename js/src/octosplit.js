@@ -112,10 +112,12 @@ var WordWrapCheckbox = React.createClass({
 });
 
 var FileDiffView = React.createClass({
+
   getInitialState: function() {
     return {
       sideBySide: this.props.sideBySide,
-      wordWrap: this.props.wordWrap
+      wordWrap: this.props.wordWrap,
+      rows: this.props.rows
     };
   },
 
@@ -127,9 +129,117 @@ var FileDiffView = React.createClass({
     }
   },
 
+  getShowRows: function(fileLines, showRange) {
+    var showRows = [];
+    for (var i = 0; i < showRange.length; ++i) {
+      var fileLine = fileLines[showRange.new + i];
+      fileLine = $('<div/>').text(' ' + fileLine).html();
+      fileLine = fileLine
+        .replace(/ /g, '&nbsp;')
+        .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;');
+
+      showRows.push({
+        type: 'lineUnchanged',
+        cells: [
+          { lineNum: showRange.old + i + 1 },
+          { lineNum: showRange.new + i + 1 },
+          { code: fileLine }
+        ]
+      });
+    }
+    return showRows;
+  },
+
+  clickShowLines: React.autoBind(function(missingRange, evt, currTargetId) {
+    var numLines = this.props.linesToShow;
+    var $target = $(document.getElementById(currTargetId));
+    this.fetchFile().then(function(fileLines) {
+      if (missingRange.length === -1) {
+        // TODO(mack): For some reason fileLines.length is one too long...
+        missingRange.length = fileLines.length - missingRange.new;
+      }
+
+      var rowIdx = NaN;
+      for (var i = 0; i < this.state.rows.length; ++i) {
+        var row = this.state.rows[i];
+        if (row.type === 'showLines' && row.cells[0] === missingRange) {
+          rowIdx = i;
+          break;
+        }
+      }
+      if (isNaN(rowIdx)) {
+        console.error('Could not find row for missingRange');
+      }
+
+      if ($target.hasClass('showAll') || missingRange.length <= numLines) {
+        var showRange = {
+          new: missingRange.new,
+          old: missingRange.old,
+          length: missingRange.length
+        };
+        var showRows = this.getShowRows(fileLines, showRange);
+        Array.prototype.splice.apply(
+          this.state.rows, [rowIdx, 1].concat(showRows));
+      } else {
+        if ($target.hasClass('showAbove')) {
+          var showRange = {
+            new: missingRange.new,
+            old: missingRange.old,
+            length: numLines
+          };
+          missingRange.old += numLines;
+          missingRange.new += numLines;
+
+          var showRows = this.getShowRows(fileLines, showRange);
+          Array.prototype.splice.apply(
+            this.state.rows, [rowIdx, 0].concat(showRows));
+        } else /* showBelow */ {
+          if (missingRange.pos === 'last') {
+            missingRange.pos = 'mid';
+          }
+
+          var showRange = {
+            new: missingRange.new + missingRange.length - numLines,
+            old: missingRange.old + missingRange.length - numLines,
+            length: numLines
+          };
+          var showRows = this.getShowRows(fileLines, showRange);
+          Array.prototype.splice.apply(
+            this.state.rows, [rowIdx + 1, 0].concat(showRows));
+        }
+
+        missingRange.length -= numLines;
+      }
+
+
+      this.setState({ rows: this.state.rows })
+
+    }.bind(this));
+
+    return false;
+  }),
+
+  fetchFile: function() {
+    if (this.state.fileDataPromise) {
+      return this.state.fileDataPromise;
+    }
+
+    this.setState({
+      fileDataPromise: $.get(this.props.rawUrl).then(function(data) {
+        var fileLines = data.split(/\r?\n/);
+        return fileLines;
+      })
+    });
+    return this.state.fileDataPromise;
+  },
+
   renderInline: function() {
-    var lines = this.props.rows.map(function(row) {
-      return this.renderInlineCode(row);
+    var lines = this.state.rows.map(function(row) {
+      if (row.type === 'showLines') {
+        return this.renderInlineShowLines(row);
+      } else {
+        return this.renderInlineCode(row);
+      }
     }.bind(this));
 
     return (
@@ -137,6 +247,97 @@ var FileDiffView = React.createClass({
         {lines}
       </tbody>
     );
+  },
+
+  renderInlineShowLines: function(row) {
+    var missingRange = row.cells[0];
+    return (
+      <tr className={'showLines ' + missingRange.pos}>
+        <td colSpan="3">
+          {this.renderShowLinesLinks(missingRange)}
+        </td>
+      </tr>
+    );
+  },
+
+  renderShowLinesLinks: function(missingRange) {
+    var links = [];
+    if (missingRange.pos === 'last' && missingRange.length < 0) {
+      var showAllLink = (
+        <a onClick={this.clickShowLines.bind(null, missingRange)}
+            class="showAll" href="#">
+          Show all remaining lines
+        </a>
+      );
+    } else {
+      var showAllLink = (
+        <a onClick={this.clickShowLines.bind(null, missingRange)}
+            class="showAll" href="#">
+          Show all {missingRange.length} remaining lines
+        </a>
+      );
+    }
+
+    links.push(showAllLink);
+
+    // TODO(mack): Refactor to remove duplication
+    if (missingRange.length >= 0 &&
+        missingRange.length < this.props.linesToShow * 2) {
+      return links;
+    }
+
+    if (missingRange.pos === 'last') {
+      var showAboveLink = [
+        <a onClick={this.clickShowLines.bind(null, missingRange)}
+            class="showAbove" href="#">
+          ▲ Show {this.props.linesToShow} lines
+        </a>,
+        <span class="dot">•</span>
+      ];
+      var showBelowLink = [
+        <span class="dot">•</span>,
+        <a onClick={this.clickShowLines.bind(null, missingRange)}
+            class="showBelow" href="#">
+          Show last {this.props.linesToShow} lines
+        </a>
+      ];
+
+    } else if (missingRange.new === 0) {
+      var showAboveLink = [
+        <a onClick={this.clickShowLines.bind(null, missingRange)}
+            class="showAbove" href="#">
+          Show first {this.props.linesToShow} lines
+        </a>,
+        <span class="dot">•</span>
+      ];
+      var showBelowLink = [
+        <span class="dot">•</span>,
+        <a onClick={this.clickShowLines.bind(null, missingRange)}
+            class="showBelow" href="#">
+          ▼ Show {this.props.linesToShow} lines
+        </a>
+      ];
+    } else {
+      var showAboveLink = [
+        <a onClick={this.clickShowLines.bind(null, missingRange)}
+            class="showAbove" href="#">
+          ▲ Show {this.props.linesToShow} lines
+        </a>,
+        <span class="dot">•</span>
+      ];
+      var showBelowLink = [
+        <span class="dot">•</span>,
+        <a onClick={this.clickShowLines.bind(null, missingRange)}
+            class="showBelow" href="#">
+          ▼ Show {this.props.linesToShow} lines
+        </a>
+      ];
+    }
+
+    links.unshift(showAboveLink);
+    links.push(showBelowLink);
+
+    return links;
   },
 
   renderInlineCode: function(row) {
@@ -153,26 +354,30 @@ var FileDiffView = React.createClass({
 
     var cells = row.cells;
 
-    // TODO(mack): see if there's some way to use React to generate markup
-    var commentIconHtml = $('<div/>').append($('<b/>')
-        .addClass('add-line-comment octicon octicon-comment-add')
-        .attr('data-remote', cells[2].commentUrl)).html();
+    if (cells[2].commentUrl) {
+      // TODO(mack): see if there's some way to use React to generate markup
+      var commentIconHtml = $('<div/>').append($('<b/>')
+          .addClass('add-line-comment octicon octicon-comment-add')
+          .attr('data-remote', cells[2].commentUrl)).html();
+    } else {
+      var commentIconHtml = '';
+    }
 
     return (
       <tr className={'file-diff-line ' + rowClass}>
-        <td id={cells[0].id}
+        <td id={cells[0].id || ''}
             className={'diff-line-num linkable-line-number '
               + (cells[0].lineNum ? '' : 'empty-cell')}
-            data-line-number={cells[0].dataLineNum}>
+            data-line-number={cells[0].dataLineNum || ''}>
           <span className="line-num-content">
             {cells[0].lineNum || ''}
           </span>
         </td>
 
-        <td id={ cells[1].id }
+        <td id={cells[1].id || ''}
             className={'diff-line-num linkable-line-number '
               + (cells[1].lineNum ? '' : 'empty-cell')}
-            data-line-number={cells[1].dataLinNum}>
+            data-line-number={cells[1].dataLineNum || ''}>
           <span className="line-num-content">
             {cells[1].lineNum || ''}
           </span>
@@ -206,7 +411,7 @@ var FileDiffView = React.createClass({
     }
 
     var rowViews = [];
-    var rows = this.props.rows;
+    var rows = this.state.rows;
     var rowIdx = 0;
     while (true) {
       if (isNaN(rowIdx) || rowIdx >= rows.length) {
@@ -381,6 +586,101 @@ function parseFileDiff($fileDiff) {
     };
   }
 
+  function parseLineIndex($row, rowIndex) {
+    return parseInt(
+        $row.find('td').eq(rowIndex).attr('data-line-number'), 10) - 1;
+  }
+
+  function processMissingRanges(rows) {
+    var prevMissingRange;
+    var isFirstMissingRange = true;
+    for (var i = 0; i < rows.length; ++i) {
+      var row = rows[i];
+      if (row.type !== 'missingRange') {
+        continue;
+      }
+
+      var $statLine = row.$row;
+      // TODO(mack): This logic assumes that if there are any unchanged lines
+      // above/below, at least one unchanged line will be shown; otherwise
+      // it might be necessary to search in the opposite direction to get line
+      // index
+      var aboveOldIndex = parseLineIndex(
+          $statLine.prevAll(':not(.gi)').first(), 0);
+      var aboveNewIndex = parseLineIndex(
+          $statLine.prevAll(':not(.gd)').first(), 1);
+      var belowOldIndex = parseLineIndex(
+          $statLine.nextAll(':not(.gi)').first(), 0);
+      var belowNewIndex = parseLineIndex(
+          $statLine.nextAll(':not(.gd)').first(), 1);
+
+      if (isFirstMissingRange) {
+        isFirstMissingRange = false;
+        var length = belowNewIndex || belowOldIndex;
+        if (!length) {
+          rows.splice(i--, 1);
+          continue;
+        }
+        var missingRange = {
+          old: 0,
+          new: 0,
+          length: length,
+          pos: 'first'
+        };
+      } else {
+        if (prevMissingRange) {
+          if (isNaN(aboveNewIndex)) {
+            aboveNewIndex = prevMissingRange.new + prevMissingRange.length - 1;
+          }
+          if (isNaN(aboveOldIndex)) {
+            aboveOldIndex = prevMissingRange.old + prevMissingRange.length - 1;
+          }
+        } else {
+          if (isNaN(aboveNewIndex)) {
+            aboveNewIndex = -1;
+          }
+          if (isNaN(aboveOldIndex)) {
+            aboveOldIndex = -1;
+          }
+        }
+
+        if (!isNaN(belowNewIndex)) {
+          var length = belowNewIndex - (aboveNewIndex + 1);
+        } else if (!isNaN(belowOldIndex)) {
+          var length = belowOldIndex - (aboveOldIndex + 1);
+        } else {
+          console.error('Unexpected condition');
+          continue;
+        }
+
+        var missingRange = {
+          old: aboveOldIndex + 1,
+          new: aboveNewIndex + 1,
+          length: length,
+          pos: 'middle'
+        };
+      }
+
+      rows[i] = {
+        type: 'showLines',
+        cells: [missingRange]
+      };
+      prevMissingRange = missingRange;
+    }
+
+    var $lastLine = $fileDiff.find('tr:last');
+    var missingRange = {
+      old: parseLineIndex($lastLine, 0) + 1,
+      new: parseLineIndex($lastLine, 1) + 1,
+      length: -1,
+      pos: 'last'
+    };
+    rows.push({
+      type: 'showLines',
+      cells: [missingRange]
+    });
+  }
+
   var rows = [];
 
   $fileDiff.find('tr').each(function() {
@@ -391,6 +691,9 @@ function parseFileDiff($fileDiff) {
         row.type = 'lineInsertion';
       } else if ($row.hasClass('gd')) {
         row.type = 'lineDeletion';
+      } else if ($row.hasClass('gc')) {
+        row.type = 'missingRange';
+        row.$row = $row;
       } else {
         row.type = 'lineUnchanged';
       }
@@ -409,7 +712,22 @@ function parseFileDiff($fileDiff) {
     rows.push(row);
   });
 
-  return rows;
+  processMissingRanges(rows);
+
+  var $file = $fileDiff.closest('.file');
+  var $viewFileButton = $file.find('.meta .actions .minibutton');
+  var blobUrl = $viewFileButton.attr('href');
+  // TODO(mack): Be careful of '/blob/' as user or repo name
+  var rawUrl = blobUrl.replace(/^\/(.*?)\/blob\/(.*)$/,
+      'https://github.com/$1/raw/$2');
+
+  //var $lineNumber = $fileDiff.find('.diff-line-num:first').eq(0);
+  //rows.fileIndex = parseInt($lineNumber.attr('id').match(/^L(\d+)/)[1], 10);
+
+  return {
+    rawUrl: rawUrl,
+    rows: rows
+  };
 }
 
 $(document).ready(function() {
@@ -417,13 +735,15 @@ $(document).ready(function() {
     var fileDiffViews = [];
     $('.file-diff').each(function() {
       var $fileDiff = $(this);
-      var rows = parseFileDiff($fileDiff);
+      var parsedData = parseFileDiff($fileDiff);
       // TODO(mack): Figure out how to do this cleanly
       $fileDiff.empty();
 
       var fileDiffView = (
         <FileDiffView
-            rows={rows}
+            linesToShow={20}
+            rows={parsedData.rows}
+            rawUrl={parsedData.rawUrl}
             sideBySide={settings.sideBySide || false}
             wordWrap={settings.wordWrap || false} />
       );
@@ -462,315 +782,6 @@ $(document).ready(function() {
   //  }
   //});
 //});
-
-//var FileState = (function FileStateClosure() {
-//  function FileState($fileDiff, inlineMode) {
-//    this.$fileDiff = $fileDiff;
-//    this.inlineMode = inlineMode;
-//
-//    var $lineNumber = this.$fileDiff.find('.diff-line-num:first').eq(0);
-//    this.fileIndex = parseInt($lineNumber.attr('id').match(/^L(\d+)/)[1], 10);
-//
-//    var $statLines = $fileDiff.find('.file-diff-line.gc');
-//
-//    var missingRanges = this.missingRanges = [];
-//    var prevIndicies = { old: null, new: null };
-//    for (var i = 0; i < $statLines.length; ++i) {
-//      var $statLine = $statLines.eq(i);
-//
-//      // TODO(mack): This logic assumes that if there are any unchanged lines
-//      // above/below, at least one unchanged line will be shown; otherwise
-//      // it might be necessary to search in the opposite direction to get line
-//      // index
-//      var aboveOldIndex = this.parseLineIndex(
-//          $statLine.prevAll(':not(.gi)').first(), 0);
-//      var aboveNewIndex = this.parseLineIndex(
-//          $statLine.prevAll(':not(.gd)').first(), 1);
-//      var belowOldIndex = this.parseLineIndex(
-//          $statLine.nextAll(':not(.gi)').first(), 0);
-//      var belowNewIndex = this.parseLineIndex(
-//          $statLine.nextAll(':not(.gd)').first(), 1);
-//
-//      if (i === 0) {
-//        var length = belowNewIndex || belowOldIndex;
-//        if (!length) {
-//          $statLine.remove();
-//          continue;
-//        }
-//        var missingRange = {
-//          old: 0,
-//          new: 0,
-//          length: length,
-//          isEnd: false
-//        };
-//      } else {
-//        if (missingRanges.length) {
-//          var prevMissingRange = missingRanges[missingRanges.length - 1];
-//          if (isNaN(aboveNewIndex)) {
-//            aboveNewIndex = prevMissingRange.new + prevMissingRange.length - 1;
-//          }
-//          if (isNaN(aboveOldIndex)) {
-//            aboveOldIndex = prevMissingRange.old + prevMissingRange.length - 1;
-//          }
-//        } else {
-//          if (isNaN(aboveNewIndex)) {
-//            aboveNewIndex = -1;
-//          }
-//          if (isNaN(aboveOldIndex)) {
-//            aboveOldIndex = -1;
-//          }
-//        }
-//
-//        if (!isNaN(belowNewIndex)) {
-//          var length = belowNewIndex - (aboveNewIndex + 1);
-//        } else if (!isNaN(belowOldIndex)) {
-//          var length = belowOldIndex - (aboveOldIndex + 1);
-//        } else {
-//          console.error('Unexpected condition');
-//          continue;
-//        }
-//
-//        var missingRange = {
-//          old: aboveOldIndex + 1,
-//          new: aboveNewIndex + 1,
-//          length: length,
-//          isEnd: false
-//        };
-//      }
-//
-//      missingRange.$statLine = $statLine;
-//      missingRanges.push(missingRange);
-//    }
-//
-//    var $lastLine = this.$fileDiff.find('tbody tr:last');
-//    var missingRange = {
-//      old: this.parseLineIndex($lastLine, 0) + 1,
-//      new: this.parseLineIndex($lastLine, 1) + 1,
-//      length: -1,
-//      isEnd: true
-//    };
-//    missingRange.$lastLine = $lastLine;
-//    missingRanges.push(missingRange);
-//
-//    for (var i = 0; i < missingRanges.length; ++i) {
-//      var missingRange = missingRanges[i];
-//      var $showLinesRow = $(
-//        '<tr class="show-lines">'
-//        + '<td colspan="3">'
-//        + ' <a class="show-above-20" href="#"></a>'
-//        + ' <span class="dot">•</span>'
-//        + ' <a class="show-all" href="#"></a>'
-//        + ' <span class="dot">•</span>'
-//        + ' <a class="show-below-20" href="#"></a>'
-//        + '</td>'
-//        + '</tr>'
-//      );
-//      $showLinesRow.find('.show-above-20').click(
-//          this.showAbove20.bind(this, missingRange));
-//      $showLinesRow.find('.show-all').click(
-//          this.showAll.bind(this, missingRange));
-//      $showLinesRow.find('.show-below-20').click(
-//          this.showBelow20.bind(this, missingRange));
-//
-//      this.updateShowLinesRow($showLinesRow, missingRange);
-//      if (missingRange.$lastLine) {
-//        missingRange.$lastLine.after($showLinesRow);
-//        $showLinesRow.addClass('last');
-//      } else {
-//        missingRange.$statLine.replaceWith($showLinesRow);
-//        if (missingRange.new === 0) {
-//          $showLinesRow.addClass('first');
-//        }
-//      }
-//
-//      missingRange.$showLinesRow = $showLinesRow;
-//    }
-//  }
-//
-//  FileState.prototype = {
-//
-//    updateShowLinesRow: function($showLinesRow, missingRange) {
-//
-//      if (missingRange.isEnd && missingRange.length < 0) {
-//          $showLinesRow.find('.show-all').text('Show all remaining lines');
-//      } else {
-//        $showLinesRow.find('.show-all').text(
-//            'Show all ' + missingRange.length + ' lines');
-//      }
-//
-//      if (missingRange.length >= 0 && missingRange.length < 40) {
-//        $showLinesRow.find('.show-above-20').remove();
-//        $showLinesRow.find('.show-below-20').remove();
-//        $showLinesRow.find('.dot').remove();
-//      } else {
-//        if (missingRange.isEnd) {
-//          $showLinesRow.find('.show-above-20').text('▲ Show 20 lines');
-//          $showLinesRow.find('.show-below-20').text('Show last 20 lines');
-//        } else if (missingRange.new === 0) {
-//          $showLinesRow.find('.show-above-20').text('Show first 20 lines');
-//          $showLinesRow.find('.show-below-20').text('▼ Show 20 lines');
-//        } else {
-//          $showLinesRow.find('.show-above-20').text('▲ Show 20 lines');
-//          $showLinesRow.find('.show-below-20').text('▼ Show 20 lines');
-//        }
-//      }
-//    },
-//
-//    showAbove20: function(missingRange) {
-//      return this.showLines(missingRange, 'above', 20);
-//    },
-//
-//    showBelow20: function(missingRange) {
-//      return this.showLines(missingRange, 'below', 20);
-//    },
-//
-//    showAll: function(missingRange) {
-//      return this.showLines(missingRange, 'all');
-//    },
-//
-//    showLines: function(missingRange, mode, numLines) {
-//      this.fetchFile().then(function(fileLines) {
-//        if (missingRange.length === -1) {
-//          missingRange.length = fileLines.length - missingRange.new;
-//        }
-//
-//        var removeShowLinesRow = false;
-//        var showRange;
-//
-//        var newRange = missingRange.new;
-//        if (mode === 'all' || missingRange.length <= numLines) {
-//          var index = this.missingRanges.indexOf(missingRange);
-//          this.missingRanges.splice(index, 1);
-//          showRange = {
-//            new: missingRange.new,
-//            old: missingRange.old,
-//            length: missingRange.length
-//          };
-//          removeShowLinesRow = true;
-//        } else {
-//          if (mode === 'above') {
-//            showRange = {
-//              new: missingRange.new,
-//              old: missingRange.old,
-//              length: numLines
-//            };
-//            missingRange.old += numLines;
-//            missingRange.new += numLines;
-//          } else {
-//            showRange = {
-//              new: missingRange.new + missingRange.length - numLines,
-//              old: missingRange.old + missingRange.length - numLines,
-//              length: numLines
-//            };
-//            missingRange.isEnd = false;
-//          }
-//          showRange.length = numLines;
-//          missingRange.length -= numLines;
-//        }
-//
-//        var $showLinesRow = missingRange.$showLinesRow;
-//
-//        var $lines = this.getLines(fileLines, showRange);
-//        if (mode === 'below') {
-//          $lines.insertAfter($showLinesRow);
-//        } else {
-//          $lines.insertBefore($showLinesRow);
-//        }
-//
-//        if (removeShowLinesRow) {
-//          // TODO(mack): unbind event listeners
-//          $showLinesRow.remove();
-//        } else {
-//          this.updateShowLinesRow($showLinesRow, missingRange);
-//        }
-//
-//      }.bind(this));
-//      return false;
-//    },
-//
-//    getLines: function(fileLines, range) {
-//      var lines = [];
-//      for (var i = 0; i < range.length; ++i) {
-//        var currOldLineIndex = range.old + i;
-//        var currNewLineIndex = range.new + i;
-//        var fileLine = fileLines[currNewLineIndex];
-//        var $oldLineNumber = $(
-//          '<td id="L' + this.fileIndex + 'L' + (currOldLineIndex + 1) + '"'
-//          + ' class="diff-line-num linkable-line-number"'
-//          + ' data-line-number="' + (currOldLineIndex + 1) + '">'
-//          + '  <span class="line-num-content">' + (currOldLineIndex + 1)
-//          + '  </span>'
-//          + '</td>');
-//        var $newLineNumber = $(
-//          '<td id="L' + this.fileIndex + 'R' + (currNewLineIndex + 1) + '"'
-//          + ' class="diff-line-num linkable-line-number"'
-//          + ' data-line-number="' + (currNewLineIndex + 1) + '">'
-//          + '  <span class="line-num-content">' + (currNewLineIndex + 1)
-//          + '  </span>'
-//          + '</td>');
-//
-//        // TODO(mack): add back
-//        //<b class="add-line-comment mini-icon mini-icon-add-comment"
-//        //data-remote="/mduan/pdf.js/commit_comment/form?
-//        //commit_id=6b4f72a2c3ea96e44568bd82e39efec5ece614a4&amp;
-//        //path=l10n/ar/viewer.properties&amp;position=9&amp;line=58"></b>
-//        fileLine = $('<div/>').text(' ' + fileLine).html();
-//        fileLine = fileLine
-//          .replace(/ /g, '&nbsp;')
-//          .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;');
-//        var $lineCode = $('<td class="diff-line-code"></td>').html(fileLine);
-//
-//        var $line =
-//          $('<tr class="file-diff-line"></tr>')
-//        if (this.inlineMode) {
-//          $line.append($oldLineNumber)
-//            .append($newLineNumber)
-//            .append($lineCode);
-//        } else {
-//          $line.append($oldLineNumber)
-//            .append($lineCode)
-//            .append($newLineNumber)
-//            .append($lineCode.clone());
-//        }
-//        lines.push($line.get(0));
-//      }
-//      return $(lines);
-//    },
-//
-//    fetchFile: function() {
-//      if (!this.fileDataPromise) {
-//        var $file = this.$fileDiff.closest('.file');
-//        var $viewFileButton = $file.find('.meta .actions .minibutton');
-//        var blobUrl = $viewFileButton.attr('href');
-//        // TODO(mack): Be careful of '/blob/' as user or repo name
-//        var rawUrl = blobUrl.replace(/^\/(.*?)\/blob\/(.*)$/,
-//            'https://github.com/$1/raw/$2');
-//        this.fileDataPromise = $.get(rawUrl).then(function(data) {
-//          var fileLines = data.split(/\r?\n/);
-//          return fileLines;
-//        });
-//      }
-//      return this.fileDataPromise;
-//    },
-//
-//    parseLineIndex: function($row, rowIndex) {
-//      return parseInt(
-//          $row.find('td').eq(rowIndex).attr('data-line-number'), 10) - 1;
-//    },
-//
-//    parseFileIndex: function() {
-//      var $lineNumber = this.$file.find('.file-diff-line:first td:first');
-//      var fileIndex = parseInt($lineNumber.attr('id').match(/^L(\d+)/)[1], 10);
-//      return fileIndex;
-//    },
-//
-//    setInlineMode: function(inlineMode) {
-//      this.inlineMode = inlineMode;
-//    }
-//  };
-//
-//  return FileState;
-//})();
 
 function getSetting(key) {
   return getSettings([key]).then(function(settings) {
