@@ -676,7 +676,17 @@ var FileDiffView = React.createClass({
       debugger;
       var rowIdx = $target.closest('.diff-line-code').data('row-idx');
       var $row = $target.closest('.file-diff-line').next();
+
+      // TODO(mack): Handle side by side view where comment added to existing
+      // list of comments which could be on wrong side
+      //var clickIndex = $target.closest('.diff-line-code').index();
+      //var commentIndex = $row.find('.line-comments').index();
+      //if (clickIndex !== lineIndex) {
+      //  $row = $row.clone().
+      //}
+
       $row.remove();
+      // TODO(mack): Santize $row into 3 column format
       this.state.rows.splice(rowIdx + 1, 0, {
         type: 'comments',
         cells: [{ $element: $row }]
