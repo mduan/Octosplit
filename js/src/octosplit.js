@@ -3,14 +3,6 @@
 var Checkboxes = React.createClass({
   // TODO(mack): Managing state shouldn't be necessary as long as we are only
   // rendering once; verify this is the case
-  //getInitialState: function() {
-  //  return {
-  //    sideBySide: this.props.sideBySide,
-  //    wordWrap: this.props.wordWrap,
-  //    fileDiffViews: this.props.fileDiffViews
-  //  };
-  //},
-
   render: function() {
     return (
       <span>
@@ -51,10 +43,16 @@ var SideBySideCheckbox = React.createClass({
   }),
 
   render: function() {
+    if (this.state.checked) {
+      $('#files').addClass('sideBySide');
+    } else {
+      $('#files').removeClass('sideBySide');
+    }
+
     var attributes = {
       onClick: this.clickCheckbox,
       type: 'checkbox',
-      id: 'octosplit'
+      id: 'sideBySide'
     };
     if (this.state.checked) {
       attributes.checked = 'checked';
@@ -63,7 +61,7 @@ var SideBySideCheckbox = React.createClass({
     return (
       <span>
         {React.DOM.input(attributes)}
-        <label id="octosplit-label" htmlFor="octosplit">
+        <label id="sideBySideLabel" htmlFor="sideBySide">
           <span class="mini-icon mini-icon-public-mirror"></span>
           side by side
         </label>
@@ -86,10 +84,16 @@ var WordWrapCheckbox = React.createClass({
   }),
 
   render: function() {
+    if (this.state.checked) {
+      $('#files').addClass('wordWrap');
+    } else {
+      $('#files').removeClass('wordWrap');
+    }
+
     var attributes = {
       onClick: this.clickCheckbox,
       type: 'checkbox',
-      id: 'wordwrap'
+      id: 'wordWrap'
     };
     if (this.state.checked) {
       attributes.checked = 'checked';
@@ -98,7 +102,7 @@ var WordWrapCheckbox = React.createClass({
     return (
       <span>
         {React.DOM.input(attributes)}
-        <label id="wordwrap-label" htmlFor="wordwrap">
+        <label id="wordWrapLabel" htmlFor="wordWrap">
           <span class="mini-icon mini-icon-reorder"></span>
           word wrap
         </label>
@@ -144,19 +148,18 @@ var FileDiffView = React.createClass({
       var rowClass = '';
     } else {
       console.error('Unexpected row type: ' + row.type);
+      return <tr></tr>
     }
 
     var cells = row.cells;
 
     // TODO(mack): see if there's some way to use React to generate markup
-    var $commentIconHtml = $('<div/>').append($('<b/>')
+    var commentIconHtml = $('<div/>').append($('<b/>')
         .addClass('add-line-comment octicon octicon-comment-add')
         .attr('data-remote', cells[2].commentUrl)).html();
 
     return (
-      <tr className={'file-diff-line ' + rowClass}
-          /*id="js-octosplit-js-P48"*/
-          /*data-position="48"*/>
+      <tr className={'file-diff-line ' + rowClass}>
         <td id={cells[0].id}
             className={'diff-line-num linkable-line-number '
               + (cells[0].lineNum ? '' : 'empty-cell')}
@@ -177,15 +180,186 @@ var FileDiffView = React.createClass({
 
         <td className="diff-line-code"
             dangerouslySetInnerHTML={{
-              __html: $commentIconHtml + cells[2].code}}>
+              __html: commentIconHtml + cells[2].code}}>
         </td>
       </tr>
     );
   },
 
   renderSideBySide: function() {
-    return <div></div>
-  }
+
+    function nextMatch(predicate, rows, beginIdx) {
+      if (beginIdx >= rows.length) {
+        console.error('No next match');
+        return NaN;
+      }
+      var row = rows[beginIdx];
+      while (!predicate(row)) {
+        ++beginIdx;
+        if (beginIdx >= rows.length) {
+          console.error('No next match');
+          return NaN;
+        }
+        row = rows[beginIdx];
+      }
+      return beginIdx;
+    }
+
+    var rowViews = [];
+    var rows = this.props.rows;
+    var rowIdx = 0;
+    while (true) {
+      if (isNaN(rowIdx) || rowIdx >= rows.length) {
+        break;
+      }
+      var row = rows[rowIdx];
+
+      if (row.type === 'lineInsertion' || row.type === 'lineDeletion') {
+        if (row.type === 'lineDeletion') {
+          var deleteRowIdx = rowIdx;
+          var insertRowIdx = nextMatch(function(row) {
+            return row.type !== 'lineDeletion' && row.type !== 'comments';
+          }, rows, rowIdx + 1);
+          if (rows[insertRowIdx].type !== 'lineInsertion') {
+            insertRowIdx = NaN;
+          }
+        } else {
+          var insertRowIdx = rowIdx;
+          var deleteRowIdx = NaN;
+        }
+
+        rowIdx = nextMatch(function(row) {
+          return row.type !== 'lineInsertion' &&
+                 row.type !== 'lineDeletion' &&
+                 row.type !== 'comments';
+        }, rows, rowIdx + 1);
+
+        // Process .gd and associated .gi
+        while (true) {
+          if (rows[deleteRowIdx] &&
+              rows[deleteRowIdx].type === 'comments') {
+            console.error('Unsupported row type 1');
+            ++deleteRowIdx;
+            continue;
+          } else if (rows[insertRowIdx] &&
+                     rows[insertRowIdx].type === 'comments') {
+            console.error('Unsupported row type 2');
+            ++insertRowIdx;
+            continue;
+          } else if (rows[deleteRowIdx] &&
+                     rows[deleteRowIdx].type === 'lineDeletion') {
+            var rowView = (
+              <tr className="file-diff-line">
+                {this.renderSideBySideCode(rows[deleteRowIdx++])}
+                {this.renderSideBySideCode(rows[insertRowIdx++])}
+              </tr>
+            );
+          } else {
+            deleteRowIdx = NaN;
+            break;
+          }
+
+          if (!rows[insertRowIdx] ||
+              rows[insertRowIdx].type !== 'lineInsertion' &&
+              rows[insertRowIdx].type !== 'comments') {
+            insertRowIdx = NaN;
+          }
+
+          rowViews.push(rowView);
+        }
+
+        // Process remaining .gi
+        while (true) {
+          if (rows[insertRowIdx] &&
+              rows[insertRowIdx].type === 'comments') {
+            console.error('Unsupported row type 3');
+            ++insertRowIdx;
+            continue;
+          } else if (rows[insertRowIdx] &&
+                     rows[insertRowIdx].type === 'lineInsertion') {
+            var rowView = (
+              <tr className="file-diff-line">
+                {this.renderSideBySideCode(null)}
+                {this.renderSideBySideCode(rows[insertRowIdx++])}
+              </tr>
+            );
+          } else {
+            insertRowIdx = NaN;
+            break;
+          }
+
+          rowViews.push(rowView);
+        }
+
+      } else if (rows[rowIdx].type === 'lineUnchanged') {
+        var rowView = (
+          <tr className="file-diff-line">
+            {this.renderSideBySideCode(rows[rowIdx])}
+            {this.renderSideBySideCode(rows[rowIdx])}
+          </tr>
+        );
+        rowViews.push(rowView);
+        ++rowIdx;
+      } else if (rows[rowIdx].type === 'comments') {
+        console.error('Unsupported row type 4');
+        ++rowIdx;
+      } else if (rows[rowIdx].type === 'showLines') {
+        console.error('Unsupported row type 5');
+        ++rowIdx;
+      } else {
+        console.error('There should not be any row types except the above');
+      }
+    }
+
+    return (
+      <tbody>
+        {rowViews}
+      </tbody>
+    );
+  },
+
+  renderSideBySideCode: function(row) {
+    if (!row) {
+      var rowClass = 'empty-line';
+      var lineNumCell = {};
+      var code = '';
+      var commentIconHtml = '';
+    } else {
+      if (row.type === 'lineInsertion') {
+        var rowClass = 'gi';
+        var lineNumCell = row.cells[1];
+      } else if (row.type === 'lineDeletion') {
+        var rowClass = 'gd';
+        var lineNumCell = row.cells[0];
+      } else if (row.type === 'lineUnchanged') {
+        var rowClass = '';
+        var lineNumCell = row.cells[0];
+      } else {
+        console.error('Unexpected row type: ' + row.type);
+      }
+
+      // TODO(mack): see if there's some way to use React to generate markup
+      var code = row.cells[2].code;
+      var commentIconHtml = $('<div/>').append($('<b/>')
+          .addClass('add-line-comment octicon octicon-comment-add')
+          .attr('data-remote', row.cells[2].commentUrl)).html();
+    }
+
+    return [
+      <td id={lineNumCell.id}
+          className={'diff-line-num linkable-line-number '
+            + (lineNumCell.lineNum ? '' : 'empty-cell')}
+          data-line-number={lineNumCell.dataLineNum || ''}>
+        <span className="line-num-content">
+          {lineNumCell.lineNum || ''}
+        </span>
+      </td>,
+
+      <td className={'diff-line-code ' + rowClass}
+          dangerouslySetInnerHTML={{__html: commentIconHtml + code}}>
+      </td>
+    ];
+  },
 });
 
 function parseFileDiff($fileDiff) {

@@ -1,4 +1,4 @@
-.word-wrap .diff-line-code {
+.wordWrap .diff-line-code {
   white-space: normal;
 }
 
@@ -6,13 +6,13 @@
   width: 95%;
 }
 
-#wordwrap,
-#octosplit {
+#wordWrap,
+#sideBySide {
   margin-left: 5px;
 }
 
-#wordwrap-label,
-#octosplit-label {
+#wordWrapLabel,
+#sideBySideLabel {
   margin-left: 15px;
 }
 
@@ -64,12 +64,12 @@
   background-color: white;
 }
 
-.side-by-side .file-diff td {
+.sideBySide .file-diff td {
   border-right: 1px solid #e5e5e5;
 }
 
-.side-by-side .file-diff td:nth-child(1),
-.side-by-side .file-diff td:nth-child(3) {
+.sideBySide .file-diff td:nth-child(1),
+.sideBySide .file-diff td:nth-child(3) {
   text-align: right;
   background: #eee;
   border-right: 1px solid #ccc;
@@ -78,16 +78,16 @@
   max-width: 5%;
 }
 
-.side-by-side .file-diff td {
+.sideBySide .file-diff td {
   word-break: break-all;
   word-wrap: break-word;
 }
 
-.side-by-side .file-diff td:nth-child(2) {
+.sideBySide .file-diff td:nth-child(2) {
   width: 45%;
 }
 
-.side-by-side .file-diff td:last-child {
+.sideBySide .file-diff td:last-child {
   width: 45%;
   border-right: 0;
 }
