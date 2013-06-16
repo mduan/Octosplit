@@ -260,6 +260,17 @@ var FileDiffView = React.createClass({
     );
   },
 
+  renderSideBySideShowLines: function(row) {
+    var missingRange = row.cells[0];
+    return (
+      <tr className={'showLines ' + missingRange.pos}>
+        <td colSpan="4">
+          {this.renderShowLinesLinks(missingRange)}
+        </td>
+      </tr>
+    );
+  },
+
   renderShowLinesLinks: function(missingRange) {
     var links = [];
     if (missingRange.pos === 'last' && missingRange.length < 0) {
@@ -509,7 +520,8 @@ var FileDiffView = React.createClass({
         console.error('Unsupported row type 4');
         ++rowIdx;
       } else if (rows[rowIdx].type === 'showLines') {
-        console.error('Unsupported row type 5');
+        var rowView = this.renderSideBySideShowLines(rows[rowIdx]);
+        rowViews.push(rowView);
         ++rowIdx;
       } else {
         console.error('There should not be any row types except the above');
