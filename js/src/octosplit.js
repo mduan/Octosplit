@@ -1,49 +1,18 @@
 /** @jsx React.DOM */
 
-var Checkboxes = React.createClass({
-  // TODO(mack): Managing state shouldn't be necessary as long as we are only
-  // rendering once; verify this is the case
-  render: function() {
-    return (
-      <span>
-        <SideBySideCheckbox
-            checked={this.props.sideBySide}
-            onSideBySideChange={this.onSideBySideChange} />
-        <WordWrapCheckbox
-            checked={this.props.wordWrap}
-            onWordWrapChange={this.onWordWrapChange} />
-      </span>
-    );
-  },
-
-  onSideBySideChange: React.autoBind(function(sideBySide) {
-    this.props.fileDiffViews.forEach(function(fileDiffView) {
-      fileDiffView.setState({ sideBySide: sideBySide });
-    });
-  }),
-
-  onWordWrapChange: React.autoBind(function(wordWrap) {
-    this.props.fileDiffViews.forEach(function(fileDiffView) {
-      fileDiffView.setState({ wordWrap: wordWrap });
-    });
-  })
-});
-
 var SideBySideCheckbox = React.createClass({
   getInitialState: function() {
-    return {
-      checked: this.props.checked
-    };
+    return this.props;
   },
 
   clickCheckbox: React.autoBind(function(evt) {
-    this.setState({ checked: !this.state.checked });
-    saveSetting('sideBySide', this.state.checked);
-    this.props.onSideBySideChange(this.state.checked);
+    this.setState({ sideBySide: !this.state.sideBySide });
+    saveSetting('sideBySide', this.state.sideBySide);
+    this.state.observable.fire({ sideBySide: this.state.sideBySide });
   }),
 
   render: function() {
-    if (this.state.checked) {
+    if (this.state.sideBySide) {
       $('#files').addClass('sideBySide');
     } else {
       $('#files').removeClass('sideBySide');
@@ -54,7 +23,7 @@ var SideBySideCheckbox = React.createClass({
       type: 'checkbox',
       id: 'sideBySide'
     };
-    if (this.state.checked) {
+    if (this.state.sideBySide) {
       attributes.checked = 'checked';
     }
 
@@ -72,19 +41,17 @@ var SideBySideCheckbox = React.createClass({
 
 var WordWrapCheckbox = React.createClass({
   getInitialState: function() {
-    return {
-      checked: this.props.checked
-    };
+    return this.props;
   },
 
   clickCheckbox: React.autoBind(function(evt) {
-    this.setState({ checked: !this.state.checked });
-    saveSetting('wordWrap', this.state.checked);
-    this.props.onWordWrapChange(this.state.checked);
+    this.setState({ wordWrap: !this.state.wordWrap });
+    saveSetting('wordWrap', this.state.wordWrap);
+    this.state.observable.fire({ wordWrap: wordWrap });
   }),
 
   render: function() {
-    if (this.state.checked) {
+    if (this.state.wordWrap) {
       $('#files').addClass('wordWrap');
     } else {
       $('#files').removeClass('wordWrap');
@@ -95,7 +62,7 @@ var WordWrapCheckbox = React.createClass({
       type: 'checkbox',
       id: 'wordWrap'
     };
-    if (this.state.checked) {
+    if (this.state.wordWrap) {
       attributes.checked = 'checked';
     }
 
@@ -111,34 +78,54 @@ var WordWrapCheckbox = React.createClass({
   }
 });
 
-var FileDiffView = React.createClass({
+var FileDiffViewMixin = {
+  getDiffView: function(props) {
+    if (props.sideBySide) {
+      return FileSideBySideDiffView(props);
+    } else {
+      return FileInlineDiffView(props);
+    }
+  },
 
   getInitialState: function() {
-    return {
-      sideBySide: this.props.sideBySide,
-      wordWrap: this.props.wordWrap,
-      rows: this.props.rows
-    };
+    return this.props;
   },
 
   shouldComponentUpdate: function(nextProps, nextState) {
     window.setTimeout(function() {
-      var parentNode = $(this.getDOMNode()).parent().get(0)
+      var parentNode = $(this.getDOMNode()).parent().get(0);
+      this.state.observable.remove(this.setStateCallback);
       React.unmountAndReleaseReactRootNode(parentNode);
-      React.renderComponent(
-        <FileDiffView sideBySide={this.state.sideBySide}
-            wordWrap={this.state.wordWrap} rows={this.state.rows} />,
-        parentNode);
+
+      var diffView = this.getDiffView(this.state);
+      React.renderComponent(diffView, parentNode);
     }.bind(this));
+
     return false;
   },
 
-  render: function() {
-    if (!this.state.sideBySide) {
-      return this.renderInline();
-    } else /* mode === 'sideBySide' */ {
-      return this.renderSideBySide();
+  componentDidMount: function(rootNode) {
+    var rows = this.state.rows;
+    $(rootNode).find('.inline-comments').each(function() {
+      var $element = $(this);
+      var rowIdx = $element.find('.line-comments').data('row-idx');
+      var row = rows[rowIdx];
+      row.cells[0].$element = $element;
+    });
+    this.setStateCallback = this.setState.bind(this);
+    this.state.observable.add(this.setStateCallback);
+  },
+
+  fetchFile: function() {
+    if (this.state.fileDataPromise) {
+      return this.state.fileDataPromise;
     }
+
+    this.state.fileDataPromise = $.get(this.state.rawUrl).then(function(data) {
+      var fileLines = data.split(/\r?\n/);
+      return fileLines;
+    });
+    return this.state.fileDataPromise;
   },
 
   getShowRows: function(fileLines, showRange) {
@@ -162,8 +149,8 @@ var FileDiffView = React.createClass({
     return showRows;
   },
 
-  clickShowLines: React.autoBind(function(missingRange, evt, currTargetId) {
-    var numLines = this.props.linesToShow;
+  clickShowLines: function(missingRange, evt, currTargetId) {
+    var numLines = this.state.linesToShow;
     var $target = $(document.getElementById(currTargetId));
     this.fetchFile().then(function(fileLines) {
       if (missingRange.length === -1) {
@@ -228,30 +215,102 @@ var FileDiffView = React.createClass({
     }.bind(this));
 
     return false;
-  }),
-
-  fetchFile: function() {
-    if (this.state.fileDataPromise) {
-      return this.state.fileDataPromise;
-    }
-
-    this.setState({
-      fileDataPromise: $.get(this.props.rawUrl).then(function(data) {
-        var fileLines = data.split(/\r?\n/);
-        return fileLines;
-      })
-    });
-    return this.state.fileDataPromise;
   },
 
-  renderInline: function() {
+  renderShowLinesLinks: function(missingRange) {
+    var clickShowLines = this.clickShowLines.bind(this, missingRange);
+    var links = [];
+    if (missingRange.pos === 'last' && missingRange.length < 0) {
+      var showAllLink = (
+        <a onClick={clickShowLines}
+            className="showAll" href="#">
+          Show all remaining lines
+        </a>
+      );
+    } else {
+      var showAllLink = (
+        <a onClick={clickShowLines}
+            className="showAll" href="#">
+          Show all {missingRange.length} remaining lines
+        </a>
+      );
+    }
+
+    links.push(showAllLink);
+
+    // TODO(mack): Refactor to remove duplication
+    if (missingRange.length >= 0 &&
+        missingRange.length < this.state.linesToShow * 2) {
+      return links;
+    }
+
+    if (missingRange.pos === 'last') {
+      var showAboveLink = [
+        <a onClick={clickShowLines}
+            className="showAbove" href="#">
+          ▲ Show {this.state.linesToShow} lines
+        </a>,
+        <span className="dot">•</span>
+      ];
+      var showBelowLink = [
+        <span className="dot">•</span>,
+        <a onClick={clickShowLines}
+            className="showBelow" href="#">
+          Show last {this.state.linesToShow} lines
+        </a>
+      ];
+
+    } else if (missingRange.new === 0) {
+      var showAboveLink = [
+        <a onClick={clickShowLines}
+            className="showAbove" href="#">
+          Show first {this.state.linesToShow} lines
+        </a>,
+        <span className="dot">•</span>
+      ];
+      var showBelowLink = [
+        <span className="dot">•</span>,
+        <a onClick={clickShowLines}
+            className="showBelow" href="#">
+          ▼ Show {this.state.linesToShow} lines
+        </a>
+      ];
+    } else {
+      var showAboveLink = [
+        <a onClick={clickShowLines}
+            className="showAbove" href="#">
+          ▲ Show {this.state.linesToShow} lines
+        </a>,
+        <span className="dot">•</span>
+      ];
+      var showBelowLink = [
+        <span className="dot">•</span>,
+        <a onClick={clickShowLines}
+            className="showBelow" href="#">
+          ▼ Show {this.state.linesToShow} lines
+        </a>
+      ];
+    }
+
+    links.unshift(showAboveLink);
+    links.push(showBelowLink);
+
+    return links;
+  }
+};
+
+var FileInlineDiffView = React.createClass({
+
+  mixins: [FileDiffViewMixin],
+
+  render: function() {
     var lines = this.state.rows.map(function(row, rowIdx) {
       if (row.type === 'showLines') {
-        return this.renderInlineShowLines(row);
+        return this.renderShowLines(row);
       } else if (row.type === 'comments') {
-        return this.renderInlineComments(row, rowIdx);
+        return this.renderComment(row, rowIdx);
       } else {
-        return this.renderInlineCode(row, rowIdx);
+        return this.renderCode(row, rowIdx);
       }
     }.bind(this));
 
@@ -262,30 +321,30 @@ var FileDiffView = React.createClass({
     );
   },
 
-  renderInlineShowLines: function(row) {
+  renderShowLines: function(row) {
     var missingRange = row.cells[0];
     return (
       <tr className={'showLines ' + missingRange.pos}>
-        <td colSpan="3">
+        <td colSpan={3}>
           {this.renderShowLinesLinks(missingRange)}
         </td>
       </tr>
     );
   },
 
-  renderInlineComments: function(row, rowIdx) {
+  renderComment: function(row, rowIdx) {
     var $element = row.cells[0].$element;
 
     $element.addClass('show');
     $element.find('.empty-cell').remove();
     $element.find('.empty-line').remove();
-    $element.find('.comment-count').attr('colspan', 1);
+    $element.find('.comment-count').attr('colspan', 2);
     $element.find('.line-comments')
         .attr('colspan', 1)
         .attr('data-row-idx', rowIdx);
 
     var commentsView = (
-      <tr className="inline-comments"
+      <tr className={$element.attr('class')}
           dangerouslySetInnerHTML={{ __html: $element.html() }}>
       </tr>
     );
@@ -293,111 +352,7 @@ var FileDiffView = React.createClass({
     return commentsView;
   },
 
-  componentWillUnmount: function() {
-  },
-
-  componentDidMount: function(rootNode) {
-    var rows = this.state.rows;
-    $(rootNode).find('.inline-comments').each(function() {
-      var $element = $(this);
-      var rowIdx = $element.find('.line-comments').data('row-idx');
-      var row = rows[rowIdx];
-      row.cells[0].$element = $element;
-    });
-  },
-
-  renderSideBySideShowLines: function(row) {
-    var missingRange = row.cells[0];
-    return (
-      <tr className={'showLines ' + missingRange.pos}>
-        <td colSpan="4">
-          {this.renderShowLinesLinks(missingRange)}
-        </td>
-      </tr>
-    );
-  },
-
-  renderShowLinesLinks: function(missingRange) {
-    var links = [];
-    if (missingRange.pos === 'last' && missingRange.length < 0) {
-      var showAllLink = (
-        <a onClick={this.clickShowLines.bind(null, missingRange)}
-            class="showAll" href="#">
-          Show all remaining lines
-        </a>
-      );
-    } else {
-      var showAllLink = (
-        <a onClick={this.clickShowLines.bind(null, missingRange)}
-            class="showAll" href="#">
-          Show all {missingRange.length} remaining lines
-        </a>
-      );
-    }
-
-    links.push(showAllLink);
-
-    // TODO(mack): Refactor to remove duplication
-    if (missingRange.length >= 0 &&
-        missingRange.length < this.props.linesToShow * 2) {
-      return links;
-    }
-
-    if (missingRange.pos === 'last') {
-      var showAboveLink = [
-        <a onClick={this.clickShowLines.bind(null, missingRange)}
-            class="showAbove" href="#">
-          ▲ Show {this.props.linesToShow} lines
-        </a>,
-        <span class="dot">•</span>
-      ];
-      var showBelowLink = [
-        <span class="dot">•</span>,
-        <a onClick={this.clickShowLines.bind(null, missingRange)}
-            class="showBelow" href="#">
-          Show last {this.props.linesToShow} lines
-        </a>
-      ];
-
-    } else if (missingRange.new === 0) {
-      var showAboveLink = [
-        <a onClick={this.clickShowLines.bind(null, missingRange)}
-            class="showAbove" href="#">
-          Show first {this.props.linesToShow} lines
-        </a>,
-        <span class="dot">•</span>
-      ];
-      var showBelowLink = [
-        <span class="dot">•</span>,
-        <a onClick={this.clickShowLines.bind(null, missingRange)}
-            class="showBelow" href="#">
-          ▼ Show {this.props.linesToShow} lines
-        </a>
-      ];
-    } else {
-      var showAboveLink = [
-        <a onClick={this.clickShowLines.bind(null, missingRange)}
-            class="showAbove" href="#">
-          ▲ Show {this.props.linesToShow} lines
-        </a>,
-        <span class="dot">•</span>
-      ];
-      var showBelowLink = [
-        <span class="dot">•</span>,
-        <a onClick={this.clickShowLines.bind(null, missingRange)}
-            class="showBelow" href="#">
-          ▼ Show {this.props.linesToShow} lines
-        </a>
-      ];
-    }
-
-    links.unshift(showAboveLink);
-    links.push(showBelowLink);
-
-    return links;
-  },
-
-  renderInlineCode: function(row, rowIdx) {
+  renderCode: function(row, rowIdx) {
     if (row.type === 'lineInsertion') {
       var rowClass = 'gi';
     } else if (row.type === 'lineDeletion') {
@@ -449,38 +404,14 @@ var FileDiffView = React.createClass({
         </td>
       </tr>
     );
-  },
+  }
+});
 
-  renderSideBySideComment: function(row, rowIdx, type) {
-    var $element = row.cells[0].$element;
+var FileSideBySideDiffView = React.createClass({
 
-    $element.addClass('show');
-    $element.find('.empty-cell').remove();
-    $element.find('.empty-line').remove();
-    $element.find('.comment-count').attr('colspan', 1);
-    $element.find('.line-comments')
-        .attr('colspan', 1)
-        .attr('data-row-idx', rowIdx);
+  mixins: [FileDiffViewMixin],
 
-    var $placeholder = [
-      $('<td/>').addClass('empty-cell'),
-      $('<td/>').addClass('empty-line')
-    ];
-    if (type === 'lineInsertion') {
-      $element.prepend($placeholder);
-    } else {
-      $element.append($placeholder);
-    }
-
-    var commentsView = (
-      <tr className={$element.attr('class')}
-          dangerouslySetInnerHTML={{ __html: $element.html() }}>
-      </tr>
-    );
-    return commentsView;
-  },
-
-  renderSideBySide: function() {
+  render: function() {
 
     function nextMatch(predicate, rows, beginIdx) {
       if (beginIdx >= rows.length) {
@@ -532,20 +463,20 @@ var FileDiffView = React.createClass({
         while (true) {
           if (rows[deleteRowIdx] &&
               rows[deleteRowIdx].type === 'comments') {
-            var rowView = this.renderSideBySideComment(
+            var rowView = this.renderComment(
                 rows[deleteRowIdx], deleteRowIdx, 'lineDeletion');
             ++deleteRowIdx;
           } else if (rows[insertRowIdx] &&
                      rows[insertRowIdx].type === 'comments') {
-            var rowView = this.renderSideBySideComment(
+            var rowView = this.renderComment(
                 rows[insertRowIdx], insertRowIdx, 'lineInsertion');
             ++insertRowIdx;
           } else if (rows[deleteRowIdx] &&
                      rows[deleteRowIdx].type === 'lineDeletion') {
             var rowView = (
               <tr className="file-diff-line">
-                {this.renderSideBySideCode(rows[deleteRowIdx], deleteRowIdx)}
-                {this.renderSideBySideCode(rows[insertRowIdx], insertRowIdx)}
+                {this.renderCode(rows[deleteRowIdx], deleteRowIdx)}
+                {this.renderCode(rows[insertRowIdx], insertRowIdx)}
               </tr>
             );
             ++deleteRowIdx;
@@ -568,15 +499,15 @@ var FileDiffView = React.createClass({
         while (true) {
           if (rows[insertRowIdx] &&
               rows[insertRowIdx].type === 'comments') {
-            var rowView = this.renderSideBySideComment(
+            var rowView = this.renderComment(
                 rows[insertRowIdx], insertRowIdx, 'lineInsertion');
             ++insertRowIdx;
           } else if (rows[insertRowIdx] &&
                      rows[insertRowIdx].type === 'lineInsertion') {
             var rowView = (
               <tr className="file-diff-line">
-                {this.renderSideBySideCode(null)}
-                {this.renderSideBySideCode(rows[insertRowIdx], insertRowIdx)}
+                {this.renderCode(null)}
+                {this.renderCode(rows[insertRowIdx], insertRowIdx)}
               </tr>
             );
             ++insertRowIdx;
@@ -591,19 +522,19 @@ var FileDiffView = React.createClass({
       } else if (rows[rowIdx].type === 'lineUnchanged') {
         var rowView = (
           <tr className="file-diff-line">
-            {this.renderSideBySideCode(rows[rowIdx], rowIdx)}
-            {this.renderSideBySideCode(rows[rowIdx], rowIdx)}
+            {this.renderCode(rows[rowIdx], rowIdx)}
+            {this.renderCode(rows[rowIdx], rowIdx)}
           </tr>
         );
         rowViews.push(rowView);
         ++rowIdx;
       } else if (rows[rowIdx].type === 'comments') {
-        var rowView = this.renderSideBySideComment(
+        var rowView = this.renderComment(
             rows[rowIdx], rowIdx, 'lineUnchanged');
         ++rowIdx;
         rowViews.push(rowView);
       } else if (rows[rowIdx].type === 'showLines') {
-        var rowView = this.renderSideBySideShowLines(rows[rowIdx++]);
+        var rowView = this.renderShowLines(rows[rowIdx++]);
         rowViews.push(rowView);
       } else {
         console.error('There should not be any row types except the above');
@@ -617,7 +548,47 @@ var FileDiffView = React.createClass({
     );
   },
 
-  renderSideBySideCode: function(row, rowIdx) {
+  renderShowLines: function(row) {
+    var missingRange = row.cells[0];
+    return (
+      <tr className={'showLines ' + missingRange.pos}>
+        <td colSpan={4}>
+          {this.renderShowLinesLinks(missingRange)}
+        </td>
+      </tr>
+    );
+  },
+
+  renderComment: function(row, rowIdx, type) {
+    var $element = row.cells[0].$element;
+
+    $element.addClass('show');
+    $element.find('.empty-cell').remove();
+    $element.find('.empty-line').remove();
+    $element.find('.comment-count').attr('colspan', 1);
+    $element.find('.line-comments')
+        .attr('colspan', 1)
+        .attr('data-row-idx', rowIdx);
+
+    var $placeholder = [
+      $('<td/>').addClass('empty-cell'),
+      $('<td/>').addClass('empty-line')
+    ];
+    if (type === 'lineInsertion') {
+      $element.prepend($placeholder);
+    } else {
+      $element.append($placeholder);
+    }
+
+    var commentsView = (
+      <tr className={$element.attr('class')}
+          dangerouslySetInnerHTML={{ __html: $element.html() }}>
+      </tr>
+    );
+    return commentsView;
+  },
+
+  renderCode: function(row, rowIdx) {
     if (!row) {
       var rowClass = 'empty-line';
       var lineNumCell = {};
@@ -888,6 +859,10 @@ function parseFileDiff($fileDiff) {
 
 $(document).ready(function() {
   getSettings(['sideBySide', 'wordWrap']).then(function(settings) {
+    var wordWrap = settings.wordWrap || false;
+    var sideBySide = settings.sideBySide || false;
+    var observable = $.Callbacks();
+
     var fileDiffViews = [];
     $('.file-diff').each(function() {
       var $fileDiff = $(this);
@@ -895,26 +870,27 @@ $(document).ready(function() {
       // TODO(mack): Figure out how to do this cleanly
       $fileDiff.empty();
 
-      var fileDiffView = (
-        <FileDiffView
-            linesToShow={20}
-            rows={parsedData.rows}
-            rawUrl={parsedData.rawUrl}
-            sideBySide={settings.sideBySide || false}
-            wordWrap={settings.wordWrap || false} />
-      );
+      var fileDiffView = FileDiffViewMixin.getDiffView({
+        observable: observable,
+        linesToShow: 20,
+        rows: parsedData.rows,
+        rawUrl: parsedData.rawUrl,
+        sideBySide: sideBySide,
+        wordWrap: wordWrap
+      });
       React.renderComponent(fileDiffView, $fileDiff.get(0));
 
       fileDiffViews.push(fileDiffView);
     });
 
-
+    var checkboxesView = (
+      <span>
+        <SideBySideCheckbox sideBySide={sideBySide} observable={observable} />
+        <WordWrapCheckbox wordWrap={wordWrap} observable={observable} />
+      </span>
+    );
     var $checkboxesContainer = $('<span />').appendTo($('#toc .explain'));
-    React.renderComponent(
-      <Checkboxes
-          fileDiffViews={fileDiffViews}
-          sideBySide={settings.sideBySide}
-          wordWrap={settings.wordWrap} />, $checkboxesContainer.get(0));
+    React.renderComponent(checkboxesView, $checkboxesContainer.get(0));
   });
 });
 
