@@ -4,8 +4,8 @@
 
 ## How to use
 
-* Install the Octosplit [Chrome extension](https://chrome.google.com/webstore/detail/mnkacicafjlllhcedhhphhpapmdgjfbb)
-* Just go on a diffs page on GitHub and check the new option : ![](http://imageshack.us/a/img833/9178/octosplitbutton.png)
+* Install the Octosplit [Chrome extension](TODO)
+* Just go on a diffs page on GitHub and check the new option : ![](http://i.imgur.com/hnZO7uX.png)
 
 ## What is changed
 
