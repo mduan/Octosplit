@@ -897,8 +897,8 @@ function parseFileDiff($fileDiff) {
 
 $(document).ready(function() {
   getSettings(['sideBySide', 'wordWrap']).then(function(settings) {
-    var wordWrap = settings.wordWrap || false;
-    var sideBySide = settings.sideBySide || false;
+    var wordWrap = 'wordWrap' in settings ? settings.wordWrap : true;
+    var sideBySide = 'sideBySide' in settings ? settings.sideBySide : true;
     var observable = $.Callbacks();
 
     var fileDiffViews = [];
