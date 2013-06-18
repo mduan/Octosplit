@@ -116,3 +116,16 @@
   font-family: Menlo, Consolas, Monaco, monospace;
   font-size: 10px;
 }
+
+.sideBySide .file-diff.unselectableDeletion .inline-comments,
+.sideBySide .file-diff.unselectableInsertion .inline-comments,
+.sideBySide .file-diff.unselectableDeletion tr td:nth-child(2),
+.sideBySide .file-diff.unselectableInsertion tr td:nth-child(4),
+.sideBySide .file-diff tr td:nth-child(1),
+.sideBySide .file-diff tr td:nth-child(3) {
+  -moz-user-select: -moz-none;
+  -khtml-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}

@@ -474,7 +474,7 @@ var FileSideBySideDiffView = React.createClass({
           } else if (rows[deleteRowIdx] &&
                      rows[deleteRowIdx].type === 'lineDeletion') {
             var rowView = (
-              <tr className="file-diff-line">
+              <tr className="file-diff-line" onMouseDown={this.onMouseDown}>
                 {this.renderCode(rows[deleteRowIdx], deleteRowIdx)}
                 {this.renderCode(rows[insertRowIdx], insertRowIdx)}
               </tr>
@@ -505,7 +505,7 @@ var FileSideBySideDiffView = React.createClass({
           } else if (rows[insertRowIdx] &&
                      rows[insertRowIdx].type === 'lineInsertion') {
             var rowView = (
-              <tr className="file-diff-line">
+              <tr className="file-diff-line" onMouseDown={this.onMouseDown}>
                 {this.renderCode(null)}
                 {this.renderCode(rows[insertRowIdx], insertRowIdx)}
               </tr>
@@ -521,7 +521,7 @@ var FileSideBySideDiffView = React.createClass({
 
       } else if (rows[rowIdx].type === 'lineUnchanged') {
         var rowView = (
-          <tr className="file-diff-line">
+          <tr className="file-diff-line" onMouseDown={this.onMouseDown}>
             {this.renderCode(rows[rowIdx], rowIdx)}
             {this.renderCode(rows[rowIdx], rowIdx)}
           </tr>
@@ -547,6 +547,35 @@ var FileSideBySideDiffView = React.createClass({
       </tbody>
     );
   },
+
+  onMouseDown: React.autoBind(function(evt) {
+    var selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      selection.removeAllRanges();
+    }
+
+    var $target = $(evt.target);
+    if (!$target.hasClass('diff-line-code')) {
+      $target = $target.closest('.diff-line-code');
+    }
+
+    if (!$target.hasClass('diff-line-code')) {
+      $(evt.target).closest('.file-diff')
+        .removeClass('unselectableInsertion')
+        .removeClass('unselectableDeletion');
+      return;
+    }
+
+    if ($target.index() === 1) {
+      $target.closest('.file-diff')
+        .addClass('unselectableInsertion')
+        .removeClass('unselectableDeletion');
+    } else /* index == 3 */ {
+      $target.closest('.file-diff')
+        .addClass('unselectableDeletion')
+        .removeClass('unselectableInsertion');
+    }
+  }),
 
   renderShowLines: function(row) {
     var missingRange = row.cells[0];
@@ -581,7 +610,7 @@ var FileSideBySideDiffView = React.createClass({
     }
 
     var commentsView = (
-      <tr className={$element.attr('class')}
+      <tr className={$element.attr('class')} onMouseDown={this.onMouseDown}
           dangerouslySetInnerHTML={{ __html: $element.html() }}>
       </tr>
     );
