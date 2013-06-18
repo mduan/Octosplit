@@ -47,7 +47,7 @@ var WordWrapCheckbox = React.createClass({
   clickCheckbox: React.autoBind(function(evt) {
     this.setState({ wordWrap: !this.state.wordWrap });
     saveSetting('wordWrap', this.state.wordWrap);
-    this.state.observable.fire({ wordWrap: wordWrap });
+    this.state.observable.fire({ wordWrap: this.state.wordWrap });
   }),
 
   render: function() {
@@ -303,6 +303,10 @@ var FileInlineDiffView = React.createClass({
 
   mixins: [FileDiffViewMixin],
 
+  componentDidMount: function(rootNode) {
+    $('#wrapper .container').removeClass('large');
+  },
+
   render: function() {
     var lines = this.state.rows.map(function(row, rowIdx) {
       if (row.type === 'showLines') {
@@ -410,6 +414,10 @@ var FileInlineDiffView = React.createClass({
 var FileSideBySideDiffView = React.createClass({
 
   mixins: [FileDiffViewMixin],
+
+  componentDidMount: function(rootNode) {
+    $('#wrapper .container').addClass('large');
+  },
 
   render: function() {
 
@@ -913,7 +921,7 @@ $(document).ready(function() {
     });
 
     var checkboxesView = (
-      <span>
+      <span className="settingCheckboxes">
         <SideBySideCheckbox sideBySide={sideBySide} observable={observable} />
         <WordWrapCheckbox wordWrap={wordWrap} observable={observable} />
       </span>

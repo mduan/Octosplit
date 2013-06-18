@@ -2,17 +2,24 @@
   white-space: normal;
 }
 
-.container.large {
+#wrapper .container.large {
+  width: 95%;
+}
+#wrapper .container.large .repository-content {
   width: 95%;
 }
 
-#wordWrap,
-#sideBySide {
+.settingCheckboxes {
+  margin-left: 10px;
+}
+
+.settingCheckboxes #wordWrap,
+.settingCheckboxes #sideBySide {
   margin-left: 5px;
 }
 
-#wordWrapLabel,
-#sideBySideLabel {
+.settingCheckboxes #wordWrapLabel,
+.settingCheckboxes #sideBySideLabel {
   margin-left: 15px;
 }
 
@@ -105,6 +112,7 @@
   background-color: #f8eec7;
   left: 27px;
   width: 14px;
+  top: 0px;
 }
 
 .file-diff .file-diff-line .diff-line-num {
