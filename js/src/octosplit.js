@@ -121,6 +121,18 @@ var FileDiffView = React.createClass({
     };
   },
 
+  shouldComponentUpdate: function(nextProps, nextState) {
+    window.setTimeout(function() {
+      var parentNode = $(this.getDOMNode()).parent().get(0)
+      React.unmountAndReleaseReactRootNode(parentNode);
+      React.renderComponent(
+        <FileDiffView sideBySide={this.state.sideBySide}
+            wordWrap={this.state.wordWrap} rows={this.state.rows} />,
+        parentNode);
+    }.bind(this));
+    return false;
+  },
+
   render: function() {
     if (!this.state.sideBySide) {
       return this.renderInline();
@@ -211,7 +223,6 @@ var FileDiffView = React.createClass({
         missingRange.length -= numLines;
       }
 
-
       this.setState({ rows: this.state.rows })
 
     }.bind(this));
@@ -238,7 +249,7 @@ var FileDiffView = React.createClass({
       if (row.type === 'showLines') {
         return this.renderInlineShowLines(row);
       } else if (row.type === 'comments') {
-        return this.renderInlineComments(row);
+        return this.renderInlineComments(row, rowIdx);
       } else {
         return this.renderInlineCode(row, rowIdx);
       }
@@ -262,75 +273,37 @@ var FileDiffView = React.createClass({
     );
   },
 
-  renderInlineComments: function(row) {
+  renderInlineComments: function(row, rowIdx) {
+    var $element = row.cells[0].$element;
+
+    $element.addClass('show');
+    $element.find('.empty-cell').remove();
+    $element.find('.empty-line').remove();
+    $element.find('.comment-count').attr('colspan', 1);
+    $element.find('.line-comments')
+        .attr('colspan', 1)
+        .attr('data-row-idx', rowIdx);
+
     var commentsView = (
-      <tr className="inline-comments">
-        <td colSpan={4}></td>
+      <tr className="inline-comments"
+          dangerouslySetInnerHTML={{ __html: $element.html() }}>
       </tr>
     );
-    row.cells[0].newView = commentsView;
+    row.cells[0].view = commentsView;
     return commentsView;
   },
 
-  componentWillMount: function() {
-  },
-
-  componentWillUpdate: function() {
-    this.restoreComments();
-  },
-
-  restoreComments: function() {
-    this.state.rows.forEach(function(row) {
-      if (row.type === 'comments') {
-        row.cells[0].$element.remove();
-      }
-    });
+  componentWillUnmount: function() {
   },
 
   componentDidMount: function(rootNode) {
-    this.updateComments(rootNode);
-  },
-
-  componentDidUpdate: function(_, _, rootNode) {
-    this.updateComments(rootNode);
-  },
-
-  updateComments: function(rootNode) {
-    this.state.rows.forEach(function(row, rowIdx) {
-      if (row.type !== 'comments') {
-        return;
-      }
-      var $element = row.cells[0].$element.clone();
-      $element.find('.empty-cell').remove();
-      $element.find('.empty-line').remove();
+    var rows = this.state.rows;
+    $(rootNode).find('.inline-comments').each(function() {
+      var $element = $(this);
+      var rowIdx = $element.find('.line-comments').data('row-idx');
+      var row = rows[rowIdx];
       row.cells[0].$element = $element;
-
-      if (this.state.sideBySide) {
-        $element.find('.comment-count').attr('colspan', 1);
-        $element.find('.line-comments').attr('colspan', 1);
-        var $placeholder = [
-          $('<td/>').addClass('empty-cell'),
-          $('<td/>').addClass('empty-line')
-        ];
-        if (row.commentType === 'lineInsertion') {
-          $element.prepend($placeholder);
-        } else {
-          $element.append($placeholder);
-        }
-        var $prevRow = $(rootNode)
-            .find('.diff-line-code[data-row-idx=' + (rowIdx - 1) + ']')
-            .closest('.file-diff-line');
-      } else {
-        $element.find('.comment-count').attr('colspan', 2);
-        $element.find('.line-comments').attr('colspan', 1);
-        var $prevRow = $(rootNode)
-            .find('.diff-line-code[data-row-idx=' + (rowIdx - 1) + ']')
-            .closest('.file-diff-line');
-      }
-
-      $element.insertAfter($prevRow);
-      $element.addClass('show');
-    }, this);
+    });
   },
 
   renderSideBySideShowLines: function(row) {
@@ -478,14 +451,32 @@ var FileDiffView = React.createClass({
     );
   },
 
-  renderSideBySideComment: function(row, type) {
-    row.commentType = type;
+  renderSideBySideComment: function(row, rowIdx, type) {
+    var $element = row.cells[0].$element;
+
+    $element.addClass('show');
+    $element.find('.empty-cell').remove();
+    $element.find('.empty-line').remove();
+    $element.find('.comment-count').attr('colspan', 1);
+    $element.find('.line-comments')
+        .attr('colspan', 1)
+        .attr('data-row-idx', rowIdx);
+
+    var $placeholder = [
+      $('<td/>').addClass('empty-cell'),
+      $('<td/>').addClass('empty-line')
+    ];
+    if (type === 'lineInsertion') {
+      $element.prepend($placeholder);
+    } else {
+      $element.append($placeholder);
+    }
+
     var commentsView = (
-      <tr className={'inline-comments-placeholder'}>
-        <td colSpan={4}></td>
+      <tr className={$element.attr('class')}
+          dangerouslySetInnerHTML={{ __html: $element.html() }}>
       </tr>
     );
-    row.cells[0].newView = commentsView;
     return commentsView;
   },
 
@@ -542,11 +533,13 @@ var FileDiffView = React.createClass({
           if (rows[deleteRowIdx] &&
               rows[deleteRowIdx].type === 'comments') {
             var rowView = this.renderSideBySideComment(
-                rows[deleteRowIdx++], 'lineDeletion');
+                rows[deleteRowIdx], deleteRowIdx, 'lineDeletion');
+            ++deleteRowIdx;
           } else if (rows[insertRowIdx] &&
                      rows[insertRowIdx].type === 'comments') {
             var rowView = this.renderSideBySideComment(
-                rows[insertRowIdx++], 'lineInsertion');
+                rows[insertRowIdx], insertRowIdx, 'lineInsertion');
+            ++insertRowIdx;
           } else if (rows[deleteRowIdx] &&
                      rows[deleteRowIdx].type === 'lineDeletion') {
             var rowView = (
@@ -576,7 +569,8 @@ var FileDiffView = React.createClass({
           if (rows[insertRowIdx] &&
               rows[insertRowIdx].type === 'comments') {
             var rowView = this.renderSideBySideComment(
-                rows[insertRowIdx++], 'lineInsertion');
+                rows[insertRowIdx], insertRowIdx, 'lineInsertion');
+            ++insertRowIdx;
           } else if (rows[insertRowIdx] &&
                      rows[insertRowIdx].type === 'lineInsertion') {
             var rowView = (
@@ -605,7 +599,8 @@ var FileDiffView = React.createClass({
         ++rowIdx;
       } else if (rows[rowIdx].type === 'comments') {
         var rowView = this.renderSideBySideComment(
-            rows[rowIdx++], 'lineUnchanged');
+            rows[rowIdx], rowIdx, 'lineUnchanged');
+        ++rowIdx;
         rowViews.push(rowView);
       } else if (rows[rowIdx].type === 'showLines') {
         var rowView = this.renderSideBySideShowLines(rows[rowIdx++]);
@@ -673,21 +668,48 @@ var FileDiffView = React.createClass({
   clickAddComment: React.autoBind(function(evt) {
     $target = $(evt.target);
     window.setTimeout(function() {
-      debugger;
-      var rowIdx = $target.closest('.diff-line-code').data('row-idx');
+      var rows = this.state.rows;
+
+      var $thisLine = $target.closest('.diff-line-code');
+      var thisRowIdx = $thisLine.data('row-idx');
+      var thisRow = rows[thisRowIdx];
+
+      if (thisRow.type === 'lineInsertion') {
+        var $otherLine = $target.closest('.diff-line-code').prev().prev();
+      } else {
+        var $otherLine = $target.closest('.diff-line-code').next().next();
+      }
+      var otherRowIdx = $otherLine.data('row-idx');
+      var otherRow = rows[otherRowIdx];
+
       var $row = $target.closest('.file-diff-line').next();
 
       // TODO(mack): Handle side by side view where comment added to existing
       // list of comments which could be on wrong side
-      //var clickIndex = $target.closest('.diff-line-code').index();
-      //var commentIndex = $row.find('.line-comments').index();
-      //if (clickIndex !== lineIndex) {
-      //  $row = $row.clone().
-      //}
+      var thisNextRow = rows[thisRowIdx + 1];
+      var otherNextRow = rows[otherRowIdx + 1];
+      if (thisNextRow && thisNextRow.type === 'comments') {
+        $row.removeClass('show-inline-comment-form');
+        var $element = thisNextRow.cells[0].$element;
+        $element.addClass('show-inline-comment-form');
+        $element.find('.js-comment-field').focus();
+        return;
+      } else if (otherNextRow && otherNextRow.type === 'comments') {
+        // TODO(mack): Give focus to textarea after re-render
+        $row.removeClass('show-inline-comment-form');
+        $row = $row.clone();
+        $row.addClass('show-inline-comment-form');
+        $row.find('.comment-holder').empty();
+        $row.find('input[name="position"]').val(thisRow.position)
+        if (thisRow.type === 'lineInsertion') {
+          $row.find('input[name="line"]').val(thisRow.cells[1].dataLineNum)
+        } else {
+          $row.find('input[name="line"]').val(thisRow.cells[0].dataLineNum)
+        }
+      }
 
       $row.remove();
-      // TODO(mack): Santize $row into 3 column format
-      this.state.rows.splice(rowIdx + 1, 0, {
+      this.state.rows.splice(thisRowIdx + 1, 0, {
         type: 'comments',
         cells: [{ $element: $row }]
       });
@@ -828,6 +850,7 @@ function parseFileDiff($fileDiff) {
       }
 
       var $cells = $row.find('td');
+      row.position = $row.data('position');
       row.cells.push(parseLineNumberCell($cells.eq(0)));
       row.cells.push(parseLineNumberCell($cells.eq(1)));
       row.cells.push(parseCodeCell($cells.eq(2)));
