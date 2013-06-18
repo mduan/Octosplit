@@ -463,8 +463,8 @@ var FileSideBySideDiffView = React.createClass({
 
         rowIdx = nextMatch(function(row) {
           return row.type !== 'lineInsertion' &&
-                 row.type !== 'lineDeletion' &&
-                 row.type !== 'comments';
+                row.type !== 'lineDeletion' &&
+                row.type !== 'comments';
         }, rows, rowIdx + 1);
 
         // Process .gd and associated .gi
@@ -475,12 +475,12 @@ var FileSideBySideDiffView = React.createClass({
                 rows[deleteRowIdx], deleteRowIdx, 'lineDeletion');
             ++deleteRowIdx;
           } else if (rows[insertRowIdx] &&
-                     rows[insertRowIdx].type === 'comments') {
+                    rows[insertRowIdx].type === 'comments') {
             var rowView = this.renderComment(
                 rows[insertRowIdx], insertRowIdx, 'lineInsertion');
             ++insertRowIdx;
           } else if (rows[deleteRowIdx] &&
-                     rows[deleteRowIdx].type === 'lineDeletion') {
+                    rows[deleteRowIdx].type === 'lineDeletion') {
             var rowView = (
               <tr className="file-diff-line" onMouseDown={this.onMouseDown}>
                 {this.renderCode(rows[deleteRowIdx], deleteRowIdx)}
@@ -511,7 +511,7 @@ var FileSideBySideDiffView = React.createClass({
                 rows[insertRowIdx], insertRowIdx, 'lineInsertion');
             ++insertRowIdx;
           } else if (rows[insertRowIdx] &&
-                     rows[insertRowIdx].type === 'lineInsertion') {
+                    rows[insertRowIdx].type === 'lineInsertion') {
             var rowView = (
               <tr className="file-diff-line" onMouseDown={this.onMouseDown}>
                 {this.renderCode(null)}
@@ -872,6 +872,7 @@ function parseFileDiff($fileDiff) {
       });
     } else {
       console.error('Encountered unexpected row type');
+      return;
     }
     rows.push(row);
   });

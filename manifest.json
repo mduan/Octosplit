@@ -8,19 +8,31 @@
     "48": "img/icon48.png",
     "128": "img/icon128.png"
   },
+  "background": {
+    "scripts": ["js/build/background.js"],
+    "matches": [
+      "https://github.com/*"
+    ],
+    "run_at": "document_end"
+  },
   "content_scripts": [{
+    "css": ["css/octosplit.css"],
     "matches": [
       "https://github.com/*/pull/*",
       "https://github.com/*/commit/*",
       "https://github.com/*/compare/*"
     ],
-    "run_at": "document_end",
-    "css": ["css/octosplit.css"],
     "js": [
       "js/ext/jquery-1.9.1.min.js",
       "js/ext/react-0.3.2.js",
       "js/build/octosplit.js"
     ]
   }],
-  "permissions": ["https://raw.github.com/", "storage"]
+  "permissions": [
+    "storage",
+    "tabs",
+    "webNavigation",
+    "https://github.com/*",
+    "https://raw.github.com/*"
+  ]
 }
